@@ -129,7 +129,7 @@ Content-Type: application/json
 ```
 
 - `amount` es la cantidad final, no un incremento. `amount: 0` quita el producto.
-- Productos al peso (`weight: "P"` en el catálogo): se supone que `amount` va en kilos, mínimo `min_weight` y en pasos de `scale` (p. ej. plátano de Canarias: 0,165 kg ≈ una pieza). **Sin probar**: solo se ha probado con productos por unidades (`weight: "U"`).
+- Productos al peso (`weight: "P"` en el catálogo): se supone que `amount` va en kilos, mínimo `min_weight` y en pasos de `scale` (p. ej. plátano de Canarias: 0,165 kg ≈ una pieza). **Sin probar**: solo se ha probado con productos por unidades (`weight: "U"`). Para confirmarlo, con una sesión preparada con `GADIS_HOME=<dir> gadis login`: `GADIS_TEST_HOME=<dir> go test -tags integration -run TestRealCartByWeight -v ./internal/cli/`. El test añade dos porciones mínimas de un producto al peso, comprueba que el carrito devuelve esa misma `amount` y muestra en el log el `line_price` frente al precio por kilo (si `line_price ≈ amount × precio/kg`, la cantidad va en kilos); después deja el carrito como estaba. Con el resultado, actualiza esta nota y quita la marca.
 - Devuelve el carrito completo: cada línea con `product_id`, `product_name`, `amount`, `line_price`, `thumbnail`…, y los totales `total_product_price`, `costs` (envío), `total_cart_price`.
 - Funciona igual en anónimo y con sesión (con sesión, el carrito trae `client_id`).
 
