@@ -1,0 +1,20 @@
+# Dependabot: revisión semanal de Go y de las actions.
+# Las minor y patch van agrupadas en un PR por ecosistema; las major, cada una en su PR.
+# Las actions están fijadas por SHA con la versión en un comentario; Dependabot actualiza ambos.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
