@@ -78,6 +78,25 @@ go test ./...
 go build ./cmd/gadis
 ```
 
+`go test ./...` usa un Gadisline falso y nunca toca gadisline.com.
+
+### Tests de integración
+
+Ejecutan el CLI contra el backend real de Gadisline para detectar cambios en su API privada. Van detrás de la etiqueta `integration`, así que ni `go test ./...` ni el CI los compilan. Se lanzan a mano:
+
+```bash
+go test -tags integration ./...
+```
+
+Los de catálogo (búsqueda, categorías, productos y códigos postales) no necesitan cuenta. Los de cuenta y carrito usan una sesión que preparas tú antes y se saltan si no la hay:
+
+```bash
+GADIS_HOME=~/.gadis-test gadis login                      # una vez; dura unos 30 días
+GADIS_TEST_HOME=~/.gadis-test go test -tags integration ./...
+```
+
+Los tests copian la sesión a un directorio temporal y no modifican `GADIS_TEST_HOME`. Hacen pocas peticiones y en serie, y no comprueban precios ni productos concretos, solo formas e invariantes.
+
 Las releases se publican con GoReleaser al subir una etiqueta `v*`.
 
 ## Licencia
