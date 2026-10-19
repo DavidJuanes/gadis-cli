@@ -29,7 +29,7 @@ de ella. El carrito siempre usa la tienda del propio carrito.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			if clear || len(args) == 1 {
-				cfg, err := config.Load()
+				cfg, err := config.Load(a.env.ConfigDir)
 				if err != nil {
 					return err
 				}
@@ -41,7 +41,7 @@ de ella. El carrito siempre usa la tienda del propio carrito.`,
 					}
 					cfg.PostalCode = pc.PostalCode
 				}
-				if err := config.Save(cfg); err != nil {
+				if err := config.Save(a.env.ConfigDir, cfg); err != nil {
 					return err
 				}
 			}

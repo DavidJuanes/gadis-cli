@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -44,39 +43,32 @@ cookies y lo cierra.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			if browser {
-				profile, err := config.BrowserProfile()
-				if err != nil {
-					return err
-				}
+				profile := config.BrowserProfile(a.env.ConfigDir)
 				a.info("Abriendo Chromium: inicia sesión en Gadisline (Mi cuenta → Iniciar sesión). Esperando hasta %s…", timeout)
-				err = browserlogin.Login(ctx, a.client.Jar, browserlogin.Options{ProfileDir: profile, Timeout: timeout})
+				err := browserlogin.Login(ctx, a.client.Jar, browserlogin.Options{ProfileDir: profile, Timeout: timeout})
 				if err != nil {
 					return err
 				}
 				return a.reportLogin(cmd)
 			}
 
-			user = firstNonEmpty(user, os.Getenv("GADIS_EMAIL"))
-			password = firstNonEmpty(password, os.Getenv("GADIS_PASSWORD"))
-			interactive := term.IsTerminal(int(os.Stdin.Fd()))
+			user = firstNonEmpty(user, a.env.Getenv("GADIS_EMAIL"))
+			password = firstNonEmpty(password, a.env.Getenv("GADIS_PASSWORD"))
+			interactive := a.env.IsTerminal()
 			if user == "" || password == "" {
 				if !interactive {
 					return errors.New("faltan credenciales: usa --user/--password, GADIS_EMAIL/GADIS_PASSWORD o --browser")
 				}
 				var err error
 				if user == "" {
-					if user, err = prompt(a.errOut, "Email de Gadisline: "); err != nil {
+					if user, err = a.prompt("Email de Gadisline: "); err != nil {
 						return err
 					}
 				}
 				if password == "" {
-					fmt.Fprint(a.errOut, "Contraseña: ")
-					raw, err := term.ReadPassword(int(os.Stdin.Fd()))
-					fmt.Fprintln(a.errOut)
-					if err != nil {
+					if password, err = a.readPassword("Contraseña: "); err != nil {
 						return err
 					}
-					password = string(raw)
 				}
 			}
 
@@ -92,7 +84,7 @@ cookies y lo cierra.`,
 				if challenge.Message != "" {
 					a.info("%s", challenge.Message)
 				}
-				code, perr := prompt(a.errOut, "Código de verificación: ")
+				code, perr := a.prompt("Código de verificación: ")
 				if perr != nil {
 					return perr
 				}
@@ -179,13 +171,27 @@ func deliveryName(t string) string {
 	return t
 }
 
-func prompt(w io.Writer, label string) (string, error) {
-	fmt.Fprint(w, label)
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+// prompt asks for a line on stderr and reads it from stdin.
+func (a *app) prompt(label string) (string, error) {
+	fmt.Fprint(a.errOut, label)
+	line, err := a.in.ReadString('\n')
 	if err != nil && line == "" {
 		return "", err
 	}
 	return strings.TrimSpace(line), nil
+}
+
+// readPassword asks for a password without echoing it when stdin is the
+// process's terminal; otherwise (tests, pipes) it reads a plain line.
+func (a *app) readPassword(label string) (string, error) {
+	f, ok := a.env.Stdin.(*os.File)
+	if !ok || !term.IsTerminal(int(f.Fd())) {
+		return a.prompt(label)
+	}
+	fmt.Fprint(a.errOut, label)
+	raw, err := term.ReadPassword(int(f.Fd()))
+	fmt.Fprintln(a.errOut)
+	return string(raw), err
 }
 
 func firstNonEmpty(vals ...string) string {
