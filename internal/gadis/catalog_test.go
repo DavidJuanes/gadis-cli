@@ -48,7 +48,7 @@ func TestSearchRequest(t *testing.T) {
 	if milk.Name() != "Leche" || milk.Unit() != "litro" || milk.ByWeight() {
 		t.Errorf("milk: name %q unit %q byWeight %v", milk.Name(), milk.Unit(), milk.ByWeight())
 	}
-	if !banana.ByWeight() || banana.Unit() != "" || banana.MinWeight != 0.165 {
+	if !banana.ByWeight() || banana.Unit() != "kilo" || banana.MinWeight != 0.165 {
 		t.Errorf("banana: %+v", banana)
 	}
 }

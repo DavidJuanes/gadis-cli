@@ -63,8 +63,14 @@ type Product struct {
 func (p Product) Name() string { return p.Description.ES() }
 
 // Unit is what UnitPrice is per, e.g. "kilo" or "litro" ("" if unknown).
+// Products sold by weight are priced per kilo even when the API sends a null
+// suffix.
 func (p Product) Unit() string {
-	return strings.TrimPrefix(strings.TrimPrefix(p.UnitSuffix.ES(), "el "), "la ")
+	unit := strings.TrimPrefix(strings.TrimPrefix(p.UnitSuffix.ES(), "el "), "la ")
+	if unit == "" && p.ByWeight() {
+		return "kilo"
+	}
+	return unit
 }
 
 // ByWeight reports whether the product is sold by weight (amount in kilos).
