@@ -1,4 +1,5 @@
-// Package config handles ~/.gadis: the user settings and the session file.
+// Package config handles the settings directory (~/.gadis): the user
+// settings and the session file.
 package config
 
 import (
@@ -9,7 +10,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Config is ~/.gadis/config.toml. It holds no secrets.
+// Config is <dir>/config.toml. It holds no secrets.
 type Config struct {
 	// PostalCode overrides the account's default postal code for catalog
 	// commands. Empty = use the account's (or the website's default store).
@@ -29,51 +30,26 @@ func Dir() (string, error) {
 }
 
 // SessionPath is where the session cookies are kept (0600).
-func SessionPath() (string, error) {
-	d, err := Dir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(d, "session.json"), nil
-}
+func SessionPath(dir string) string { return filepath.Join(dir, "session.json") }
 
 // BrowserProfile is the Chromium profile used by `gadis login --browser`.
-func BrowserProfile() (string, error) {
-	d, err := Dir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(d, "chromium"), nil
-}
+func BrowserProfile(dir string) string { return filepath.Join(dir, "chromium") }
 
-func path() (string, error) {
-	d, err := Dir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(d, "config.toml"), nil
-}
+func path(dir string) string { return filepath.Join(dir, "config.toml") }
 
-// Load reads config.toml; a missing file is an empty config.
-func Load() (Config, error) {
+// Load reads config.toml from dir; a missing file is an empty config.
+func Load(dir string) (Config, error) {
 	var c Config
-	p, err := path()
-	if err != nil {
-		return c, err
-	}
-	_, err = toml.DecodeFile(p, &c)
+	_, err := toml.DecodeFile(path(dir), &c)
 	if errors.Is(err, os.ErrNotExist) {
 		return c, nil
 	}
 	return c, err
 }
 
-// Save writes config.toml.
-func Save(c Config) error {
-	p, err := path()
-	if err != nil {
-		return err
-	}
+// Save writes config.toml in dir.
+func Save(dir string, c Config) error {
+	p := path(dir)
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}

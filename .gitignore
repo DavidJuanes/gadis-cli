@@ -2,3 +2,4 @@
 /dist/
 *.har
 session.json
+.claude/worktrees/

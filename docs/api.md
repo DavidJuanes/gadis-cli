@@ -129,7 +129,11 @@ Content-Type: application/json
 ```
 
 - `amount` es la cantidad final, no un incremento. `amount: 0` quita el producto.
-- Productos al peso (`weight: "P"` en el catálogo): se supone que `amount` va en kilos, mínimo `min_weight` y en pasos de `scale` (p. ej. plátano de Canarias: 0,165 kg ≈ una pieza). **Sin probar**: solo se ha probado con productos por unidades (`weight: "U"`).
+- Productos al peso (`weight: "P"` en el catálogo): `amount` va en **kilos**. Comprobado el 2026-10-20 capturando la web con el plátano de Canarias (`min_weight` y `scale` 0,165 kg, "peso aproximado de la unidad"): la ficha muestra la cantidad en kilos, el botón «+» sube de `scale` en `scale` (0,165 → 0,330) sin llamar al servidor, y «Añadir» manda `amount: 0.33` con `preparation_mode_id: null`; el carrito devuelve `amount: 0.33` y `line_price: 0.91` (0,33 × 2,75 €/kg, redondeado).
+  - La API **no valida** la cantidad: acepta valores que no son múltiplo de `scale` (0,2) e incluso por debajo de `min_weight` (0,1 con mínimo 0,165), y cobra en proporción. Solo la interfaz de la web limita a múltiplos de `scale`.
+  - El CLI rechaza cantidades fuera de `min_weight`/`max_weight` y, por decisión, no exige múltiplos de `scale`.
+  - `preparation_mode_id` (preparación en charcutería, pescadería…): ninguno de los 1.327 productos de Frescos de la tienda de prueba (574 al peso) trae `preparation_methods`, así que se manda siempre `null`.
+  - Para volver a comprobarlo contra la web real, con una sesión preparada con `GADIS_HOME=<dir> gadis login`: `GADIS_TEST_HOME=<dir> go test -tags integration -run TestRealCartByWeight -v ./internal/cli/` (añade dos porciones mínimas, compara cantidad y `line_price` y deja el carrito como estaba).
 - Devuelve el carrito completo: cada línea con `product_id`, `product_name`, `amount`, `line_price`, `thumbnail`…, y los totales `total_product_price`, `costs` (envío), `total_cart_price`.
 - Funciona igual en anónimo y con sesión (con sesión, el carrito trae `client_id`).
 
