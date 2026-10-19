@@ -81,9 +81,12 @@ func TestRealCategories(t *testing.T) {
 func TestRealCategoryBySlug(t *testing.T) {
 	gadis := clitest.Production(t)
 
-	var out realProductList
-	gadis.Run(t, "category", "lacteos", "--limit", "5", "--json").Success(t).JSON(t, &out)
-	checkProducts(t, out.Products)
+	// By its last segment and by its full slug.
+	for _, slug := range []string{"lacteos", "/lacteos"} {
+		var out realProductList
+		gadis.Run(t, "category", slug, "--limit", "5", "--json").Success(t).JSON(t, &out)
+		checkProducts(t, out.Products)
+	}
 
 	res := gadis.Run(t, "category", "no-existe-esta-categoria")
 	if res.Code == 0 || !strings.Contains(res.Stderr, "no existe la categoría") {

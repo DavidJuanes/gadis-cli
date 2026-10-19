@@ -181,11 +181,13 @@ func (a *app) prompt(label string) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
-// readPassword asks for a password without echoing it when stdin is the
-// process's terminal; otherwise (tests, pipes) it reads a plain line.
+// readPassword asks for a password. Env.IsTerminal alone decides whether
+// there is a terminal; on one backed by a file (the real one) the password is
+// not echoed. Otherwise (pipes, or a terminal injected by tests) it reads a
+// plain line.
 func (a *app) readPassword(label string) (string, error) {
-	f, ok := a.env.Stdin.(*os.File)
-	if !ok || !term.IsTerminal(int(f.Fd())) {
+	f, isFile := a.env.Stdin.(*os.File)
+	if !a.env.IsTerminal() || !isFile {
 		return a.prompt(label)
 	}
 	fmt.Fprint(a.errOut, label)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -145,10 +146,12 @@ func (a *app) changeCart(ctx context.Context, productID string, next func(curren
 		if err != nil {
 			return err
 		}
-		if len(products) == 0 {
+		// Look the id up in the answer: never trust it holds only that product.
+		i := slices.IndexFunc(products, func(p gadis.Product) bool { return p.ID == productID })
+		if i < 0 {
 			return fmt.Errorf("el producto %s no existe en la tienda del carrito (CP %s)", productID, cart.PostalCode)
 		}
-		p := products[0]
+		p := products[i]
 		name = p.Name()
 		if err := checkAmount(p, qty); err != nil {
 			return err

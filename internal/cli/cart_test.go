@@ -196,6 +196,20 @@ func TestCartInvalidChangesFailWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestCartChangeFailsWhenTheLookupReturnsAnotherProduct(t *testing.T) {
+	// The catalog ignores product_ids and returns whatever it sells.
+	fake, gadis := loggedIn(t, product(t, "p-platano"))
+	fake.Catalog.IgnoreProductIDs = true
+
+	res := gadis.Run(t, "cart", "add", "p-leche")
+	if want := "no existe en la tienda del carrito (CP 15001)"; res.Code == 0 || !strings.Contains(res.Stderr, want) {
+		t.Errorf("code %d, stderr %q; want a failure with %q", res.Code, res.Stderr, want)
+	}
+	if w := writes(fake); len(w) != 0 {
+		t.Errorf("the cart got %d writes, want none", len(w))
+	}
+}
+
 func TestCartClearYesEmptiesTheCart(t *testing.T) {
 	fake, gadis := loggedIn(t)
 	fake.Cart.Lines = append(fake.Cart.Lines, gadistest.CartLine{ProductID: "p2", Name: "Pan", Amount: 1, LinePrice: 0.9})

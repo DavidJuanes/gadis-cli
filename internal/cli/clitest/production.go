@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -18,7 +17,7 @@ import (
 // (like GADIS_HOME) that holds the session prepared for integration tests.
 const SessionDirEnv = "GADIS_TEST_HOME"
 
-const sessionHelp = "prepara una sesión con `GADIS_HOME=<dir> gadis login` y ejecuta los tests con " +
+const sessionHelp = "prepare a session with `GADIS_HOME=<dir> gadis login` and run the tests with " +
 	SessionDirEnv + "=<dir> go test -tags integration ./..."
 
 // Production returns a CLI wired to the real gadisline.com, with a fresh
@@ -38,24 +37,24 @@ func ProductionWithSession(t testing.TB) *CLI {
 	t.Helper()
 	src := os.Getenv(SessionDirEnv)
 	if src == "" {
-		t.Skipf("sin sesión preparada (%s vacía): %s", SessionDirEnv, sessionHelp)
+		t.Skipf("no prepared session (%s is empty): %s", SessionDirEnv, sessionHelp)
 	}
 	session, err := os.ReadFile(config.SessionPath(src))
 	if errors.Is(err, fs.ErrNotExist) {
-		t.Skipf("sin sesión en %s: %s", src, sessionHelp)
+		t.Skipf("no session in %s: %s", src, sessionHelp)
 	}
 	if err != nil {
-		t.Fatalf("leyendo la sesión preparada: %v", err)
+		t.Fatalf("reading the prepared session: %v", err)
 	}
 	c := Production(t)
-	if err := os.WriteFile(filepath.Join(c.Dir, filepath.Base(config.SessionPath(c.Dir))), session, 0o600); err != nil {
+	if err := os.WriteFile(config.SessionPath(c.Dir), session, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if res := c.Run(t, "whoami"); res.Code != 0 {
 		if strings.Contains(res.Stderr, gadis.ErrNotLoggedIn.Error()) {
-			t.Skipf("la sesión de %s no es válida o ha caducado: %s", src, sessionHelp)
+			t.Skipf("the session in %s is invalid or expired: %s", src, sessionHelp)
 		}
-		t.Fatalf("whoami con la sesión preparada: código %d\n%s", res.Code, res.Stderr)
+		t.Fatalf("whoami with the prepared session: exit code %d\n%s", res.Code, res.Stderr)
 	}
 	return c
 }
