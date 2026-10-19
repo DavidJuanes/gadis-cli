@@ -1,0 +1,4 @@
+/gadis
+/dist/
+*.har
+session.json
