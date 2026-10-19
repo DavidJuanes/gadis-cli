@@ -2,16 +2,19 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/DavidJuanes/gadis-cli/internal/config"
 	"github.com/DavidJuanes/gadis-cli/internal/gadis"
@@ -21,21 +24,70 @@ import (
 var Version = "dev"
 
 type app struct {
+	env    Env
 	json   bool
 	out    io.Writer
 	errOut io.Writer
+	in     *bufio.Reader // shared so successive prompts don't lose buffered input
 	client *gadis.Client
 }
 
-// Execute runs the CLI and returns the process exit code.
+// Env is everything the CLI takes from the outside world. The binary uses the
+// process's (see Execute); tests inject their own.
+type Env struct {
+	Args           []string // without the program name
+	Stdin          io.Reader
+	Stdout, Stderr io.Writer
+	URLs           gadis.Endpoints   // Gadisline services
+	Transport      http.RoundTripper // nil = http.DefaultTransport
+	ConfigDir      string            // settings directory (GADIS_HOME)
+	IsTerminal     func() bool       // whether stdin is an interactive terminal
+	Getenv         func(string) string
+}
+
+// Execute runs the CLI with the process's arguments, standard streams,
+// environment and the production services, and returns the exit code.
 func Execute() int {
-	a := &app{out: os.Stdout, errOut: os.Stderr}
+	dir, err := config.Dir()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 1
+	}
+	return Run(context.Background(), Env{
+		Args:       os.Args[1:],
+		Stdin:      os.Stdin,
+		Stdout:     os.Stdout,
+		Stderr:     os.Stderr,
+		URLs:       gadis.Production,
+		ConfigDir:  dir,
+		IsTerminal: func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
+		Getenv:     os.Getenv,
+	})
+}
+
+// Run runs the CLI in env and returns the exit code: 0 on success, 1 on error.
+// With --json, errors go to stderr as {"error": "…"}.
+func Run(ctx context.Context, env Env) int {
+	if env.Stdin == nil {
+		env.Stdin = strings.NewReader("")
+	}
+	if env.IsTerminal == nil {
+		env.IsTerminal = func() bool { return false }
+	}
+	if env.Getenv == nil {
+		env.Getenv = func(string) string { return "" }
+	}
+	a := &app{env: env, out: env.Stdout, errOut: env.Stderr, in: bufio.NewReader(env.Stdin)}
 	root := a.rootCmd()
-	if err := root.ExecuteContext(context.Background()); err != nil {
+	root.SetArgs(env.Args)
+	root.SetIn(env.Stdin)
+	root.SetOut(env.Stdout)
+	root.SetErr(env.Stderr)
+	if err := root.ExecuteContext(ctx); err != nil {
 		if a.json {
-			_ = json.NewEncoder(os.Stderr).Encode(map[string]string{"error": err.Error()})
+			_ = json.NewEncoder(env.Stderr).Encode(map[string]string{"error": err.Error()})
 		} else {
-			fmt.Fprintln(os.Stderr, "error:", err)
+			fmt.Fprintln(env.Stderr, "error:", err)
 		}
 		return 1
 	}
@@ -71,15 +123,16 @@ func (a *app) init() error {
 	if a.client != nil {
 		return nil
 	}
-	path, err := config.SessionPath()
-	if err != nil {
-		return err
-	}
+	path := config.SessionPath(a.env.ConfigDir)
 	jar, err := gadis.LoadJar(path)
 	if err != nil {
 		return fmt.Errorf("leyendo la sesión %s: %w", path, err)
 	}
 	a.client = gadis.New(jar)
+	a.client.URLs = a.env.URLs
+	if a.env.Transport != nil {
+		a.client.HTTP.Transport = a.env.Transport
+	}
 	return nil
 }
 
@@ -110,7 +163,7 @@ type store struct {
 // postal code saved with `gadis postal-code`, then the account's default
 // delivery, then the website's default assortment.
 func (a *app) resolveStore(ctx context.Context, flagCP string) (store, error) {
-	cfg, err := config.Load()
+	cfg, err := config.Load(a.env.ConfigDir)
 	if err != nil {
 		return store{}, err
 	}
