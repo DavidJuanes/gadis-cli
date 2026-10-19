@@ -148,3 +148,51 @@ func TestCLICartReadsTheAccountCart(t *testing.T) {
 		t.Errorf("Lines() = %v, want %v", got, want)
 	}
 }
+
+// End to end through the CLI against the fake Gadisline: whatever the test
+// does to the cart with gadis commands, the guard puts the starting lines back
+// with gadis commands, even when the test stops half way.
+func TestGuardCartRestoresTheCLICart(t *testing.T) {
+	for name, c := range map[string]struct {
+		start   []gadistest.CartLine
+		changes [][]string
+	}{
+		"changed and removed": {
+			start: []gadistest.CartLine{
+				{ProductID: "p-leche", Name: "Leche", Amount: 2, LinePrice: 1.7},
+				{ProductID: "p-platano", Name: "Plátano", Amount: 0.33, LinePrice: 0.91},
+			},
+			changes: [][]string{{"cart", "set", "p-leche", "5"}, {"cart", "remove", "p-platano"}},
+		},
+		"empty at the start": {
+			changes: [][]string{{"cart", "add", "p-leche"}, {"cart", "add", "p-platano", "--qty", "0,5"}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := gadistest.New(t)
+			fake.Cart.Lines = slices.Clone(c.start)
+			gadis := New(t, fake)
+			gadis.Login(t)
+
+			t.Run("test", func(t *testing.T) {
+				GuardCart(t, CLICart(t, gadis))
+				for _, args := range c.changes {
+					gadis.Run(t, args...).Success(t)
+				}
+				t.SkipNow()
+			})
+
+			got := make([]CartLine, len(fake.Cart.Lines))
+			for i, l := range fake.Cart.Lines {
+				got[i] = CartLine{l.ProductID, l.Amount}
+			}
+			want := make([]CartLine, len(c.start))
+			for i, l := range c.start {
+				want[i] = CartLine{l.ProductID, l.Amount}
+			}
+			if !sameLines(got, want) {
+				t.Errorf("cart after the test = %v, want %v", got, want)
+			}
+		})
+	}
+}
