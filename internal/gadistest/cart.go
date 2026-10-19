@@ -106,7 +106,7 @@ func (c *Cart) register(mux *http.ServeMux, s *Server) {
 		p := Product{ID: body.ProductID}
 		if *body.Amount > 0 {
 			i := slices.IndexFunc(s.Catalog.Products, func(p Product) bool {
-				return p.ID == body.ProductID && (len(p.StoreIDs) == 0 || slices.Contains(p.StoreIDs, c.StoreID))
+				return p.ID == body.ProductID && p.soldIn(c.StoreID)
 			})
 			if i < 0 {
 				http.Error(w, `{"message":"product not found"}`, http.StatusNotFound)

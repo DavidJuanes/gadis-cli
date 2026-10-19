@@ -40,6 +40,18 @@ const (
 	clientsPrefix = "/clients-api"
 )
 
+// services is the one list of the fake's services: where each is mounted and
+// which endpoint of the client points to it.
+var services = []struct {
+	prefix   string
+	endpoint func(*gadis.Endpoints) *string
+}{
+	{catalogPrefix, func(e *gadis.Endpoints) *string { return &e.Catalog }},
+	{storePrefix, func(e *gadis.Endpoints) *string { return &e.Store }},
+	{cartPrefix, func(e *gadis.Endpoints) *string { return &e.Cart }},
+	{clientsPrefix, func(e *gadis.Endpoints) *string { return &e.Clients }},
+}
+
 // Server is the fake Gadisline. Configure its areas before running commands.
 type Server struct {
 	Session *Session
@@ -87,13 +99,11 @@ func (s *Server) URL() string { return s.srv.URL }
 
 // Endpoints are the service URLs to give the client or the CLI.
 func (s *Server) Endpoints() gadis.Endpoints {
-	return gadis.Endpoints{
-		Web:     s.srv.URL,
-		Catalog: s.srv.URL + catalogPrefix,
-		Store:   s.srv.URL + storePrefix,
-		Cart:    s.srv.URL + cartPrefix,
-		Clients: s.srv.URL + clientsPrefix,
+	e := gadis.Endpoints{Web: s.srv.URL}
+	for _, sv := range services {
+		*sv.endpoint(&e) = s.srv.URL + sv.prefix
 	}
+	return e
 }
 
 // Transport trusts the fake's TLS certificate.
@@ -144,9 +154,9 @@ func (s *Server) record(next http.Handler) http.Handler {
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(bytes.NewReader(body))
 		path := r.URL.Path
-		for _, p := range []string{catalogPrefix, storePrefix, cartPrefix, clientsPrefix} {
-			if strings.HasPrefix(path, p+"/") {
-				path = strings.TrimPrefix(path, p)
+		for _, sv := range services {
+			if strings.HasPrefix(path, sv.prefix+"/") {
+				path = strings.TrimPrefix(path, sv.prefix)
 				break
 			}
 		}

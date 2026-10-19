@@ -41,27 +41,26 @@ type Env struct {
 	URLs           gadis.Endpoints   // Gadisline services
 	Transport      http.RoundTripper // nil = http.DefaultTransport
 	ConfigDir      string            // settings directory (GADIS_HOME)
-	IsTerminal     func() bool       // whether stdin is an interactive terminal
-	Getenv         func(string) string
+	// ResolveConfigDir finds the settings directory when ConfigDir is empty.
+	// It runs only when a command needs it, so --version and help work even
+	// if it fails (e.g. without $HOME).
+	ResolveConfigDir func() (string, error)
+	IsTerminal       func() bool // whether stdin is an interactive terminal
+	Getenv           func(string) string
 }
 
 // Execute runs the CLI with the process's arguments, standard streams,
 // environment and the production services, and returns the exit code.
 func Execute() int {
-	dir, err := config.Dir()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		return 1
-	}
 	return Run(context.Background(), Env{
-		Args:       os.Args[1:],
-		Stdin:      os.Stdin,
-		Stdout:     os.Stdout,
-		Stderr:     os.Stderr,
-		URLs:       gadis.Production,
-		ConfigDir:  dir,
-		IsTerminal: func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
-		Getenv:     os.Getenv,
+		Args:             os.Args[1:],
+		Stdin:            os.Stdin,
+		Stdout:           os.Stdout,
+		Stderr:           os.Stderr,
+		URLs:             gadis.Production,
+		ResolveConfigDir: config.Dir,
+		IsTerminal:       func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
+		Getenv:           os.Getenv,
 	})
 }
 
@@ -122,6 +121,16 @@ se guarda en ~/.gadis/session.json y dura unos 30 días.`,
 func (a *app) init() error {
 	if a.client != nil {
 		return nil
+	}
+	if a.env.ConfigDir == "" {
+		if a.env.ResolveConfigDir == nil {
+			return errors.New("no se conoce el directorio de configuración")
+		}
+		dir, err := a.env.ResolveConfigDir()
+		if err != nil {
+			return fmt.Errorf("no se pudo determinar el directorio de configuración: %w", err)
+		}
+		a.env.ConfigDir = dir
 	}
 	path := config.SessionPath(a.env.ConfigDir)
 	jar, err := gadis.LoadJar(path)

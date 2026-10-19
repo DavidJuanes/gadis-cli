@@ -14,7 +14,6 @@ package cli_test
 
 import (
 	"math"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -144,12 +143,7 @@ func (ct cartTest) checkUnchanged(t *testing.T, after string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sorted := func(ls []clitest.CartLine) []clitest.CartLine {
-		ls = slices.Clone(ls)
-		slices.SortFunc(ls, func(a, b clitest.CartLine) int { return strings.Compare(a.ProductID, b.ProductID) })
-		return ls
-	}
-	if !slices.Equal(sorted(got), sorted(ct.start)) {
+	if !clitest.SameLines(got, ct.start) {
 		t.Errorf("after %s the cart changed: %v, want %v", after, got, ct.start)
 	}
 }
@@ -234,7 +228,7 @@ func TestRealCartByWeight(t *testing.T) {
 func TestRealCartClear(t *testing.T) {
 	ct := newCartTest(t)
 	if len(ct.start) > 0 {
-		t.Skip("el carrito no estaba vacío: `cart clear --yes` solo se prueba con el carrito vacío al empezar")
+		t.Skip("the cart was not empty: `cart clear --yes` is only tried on a cart empty at the start")
 	}
 	p := ct.product(t, false, "leche", "agua", "aceite")
 	ct.gadis.Run(t, "cart", "add", p.ID).Success(t)

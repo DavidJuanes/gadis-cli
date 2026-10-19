@@ -35,13 +35,13 @@ func (m *memCart) Set(productID string, amount float64) error {
 	return nil
 }
 
-func sameLines(a, b []CartLine) bool {
-	sorted := func(ls []CartLine) []CartLine {
-		ls = slices.Clone(ls)
-		slices.SortFunc(ls, func(x, y CartLine) int { return strings.Compare(x.ProductID, y.ProductID) })
-		return ls
+// linesOf are the fake's cart lines as the guard sees them.
+func linesOf(ls []gadistest.CartLine) []CartLine {
+	out := make([]CartLine, len(ls))
+	for i, l := range ls {
+		out[i] = CartLine{l.ProductID, l.Amount}
 	}
-	return slices.Equal(sorted(a), sorted(b))
+	return out
 }
 
 // The guard restores the starting lines even when the test stops half way
@@ -52,7 +52,7 @@ func TestGuardCartRestoresWhenTestStopsHalfWay(t *testing.T) {
 
 	t.Run("stops half way", func(t *testing.T) {
 		got := GuardCart(t, cart)
-		if !sameLines(got, start) {
+		if !SameLines(got, start) {
 			t.Fatalf("GuardCart returned %v, want the starting lines %v", got, start)
 		}
 		cart.Set("test-product", 3) // added by the test
@@ -62,7 +62,7 @@ func TestGuardCartRestoresWhenTestStopsHalfWay(t *testing.T) {
 		t.Error("not reached")
 	})
 
-	if !sameLines(cart.lines, start) {
+	if !SameLines(cart.lines, start) {
 		t.Errorf("cart after the test = %v, want %v", cart.lines, start)
 	}
 }
@@ -182,15 +182,8 @@ func TestGuardCartRestoresTheCLICart(t *testing.T) {
 				t.SkipNow()
 			})
 
-			got := make([]CartLine, len(fake.Cart.Lines))
-			for i, l := range fake.Cart.Lines {
-				got[i] = CartLine{l.ProductID, l.Amount}
-			}
-			want := make([]CartLine, len(c.start))
-			for i, l := range c.start {
-				want[i] = CartLine{l.ProductID, l.Amount}
-			}
-			if !sameLines(got, want) {
+			got, want := linesOf(fake.Cart.Lines), linesOf(c.start)
+			if !SameLines(got, want) {
 				t.Errorf("cart after the test = %v, want %v", got, want)
 			}
 		})

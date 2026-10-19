@@ -29,15 +29,21 @@ type Cart interface {
 // amounts when the test ends, whether it passes, fails or stops half way. It
 // returns the saved lines. Integration tests use it to leave the maintainer's
 // real cart as it was.
+//
+// Limitation: with CLICart, lines are restored with `gadis cart set`, which
+// validates the product like any other change. If a line that was in the cart
+// before the test was changed and its product is no longer available, it
+// can't be set back: the restore fails and the test reports what the cart had,
+// to fix it by hand.
 func GuardCart(t testing.TB, cart Cart) []CartLine {
 	t.Helper()
 	start, err := cart.Lines()
 	if err != nil {
-		t.Fatalf("leyendo el carrito antes del test: %v", err)
+		t.Fatalf("reading the cart before the test: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := restoreCart(cart, start); err != nil {
-			t.Errorf("no se pudo dejar el carrito como estaba: %v", err)
+			t.Errorf("could not leave the cart as it was: %v", err)
 		}
 	})
 	return slices.Clone(start)
@@ -46,7 +52,7 @@ func GuardCart(t testing.TB, cart Cart) []CartLine {
 // restoreCart sets back the lines that differ from want, removes the ones
 // that weren't there, and reads the cart back to check it.
 func restoreCart(cart Cart, want []CartLine) error {
-	wanted := fmt.Sprintf("el carrito tenía: %s", formatLines(want))
+	wanted := fmt.Sprintf("the cart had: %s", formatLines(want))
 	got, err := cart.Lines()
 	if err != nil {
 		return fmt.Errorf("%w; %s", err, wanted)
@@ -64,7 +70,7 @@ func restoreCart(cart Cart, want []CartLine) error {
 		return fmt.Errorf("%w; %s", err, wanted)
 	}
 	if left := cartChanges(got, want); len(left) > 0 {
-		return fmt.Errorf("tras restaurarlo tiene %s; %s", formatLines(got), wanted)
+		return fmt.Errorf("after restoring it has %s; %s", formatLines(got), wanted)
 	}
 	return nil
 }
@@ -93,13 +99,19 @@ func cartChanges(got, want []CartLine) []CartLine {
 	return out
 }
 
+// SameLines reports whether a and b hold the same products with the same
+// amounts, in any order.
+func SameLines(a, b []CartLine) bool {
+	return len(a) == len(b) && len(cartChanges(a, b)) == 0
+}
+
 func sameAmount(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
 
 func formatAmount(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
 
 func formatLines(ls []CartLine) string {
 	if len(ls) == 0 {
-		return "ninguna línea"
+		return "no lines"
 	}
 	parts := make([]string, len(ls))
 	for i, l := range ls {
@@ -120,7 +132,7 @@ type cliCart struct {
 func (cc cliCart) Lines() ([]CartLine, error) {
 	res := cc.c.Run(cc.t, "cart", "--json")
 	if res.Code != 0 {
-		return nil, fmt.Errorf("gadis cart: código %d: %s", res.Code, strings.TrimSpace(res.Stderr))
+		return nil, fmt.Errorf("gadis cart: exit code %d: %s", res.Code, strings.TrimSpace(res.Stderr))
 	}
 	var cart struct {
 		Products []struct {
@@ -141,7 +153,7 @@ func (cc cliCart) Lines() ([]CartLine, error) {
 func (cc cliCart) Set(productID string, amount float64) error {
 	res := cc.c.Run(cc.t, "cart", "set", productID, formatAmount(amount), "--json")
 	if res.Code != 0 {
-		return fmt.Errorf("código %d: %s", res.Code, strings.TrimSpace(res.Stderr))
+		return fmt.Errorf("exit code %d: %s", res.Code, strings.TrimSpace(res.Stderr))
 	}
 	return nil
 }

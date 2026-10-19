@@ -12,6 +12,9 @@ import (
 type Catalog struct {
 	Products   []Product
 	Categories []Category
+	// IgnoreProductIDs makes search ignore product_ids, as the real API does
+	// with fields it does not know, to check clients do not trust the result.
+	IgnoreProductIDs bool
 }
 
 // Category is a node of the category tree. Slug is the full path, as in the
@@ -63,6 +66,11 @@ type Offer struct {
 	Type    string // e.g. "DISCOUNT"
 	Icon    string // shown name, e.g. "2ª unidad -50%"
 	EndDate string // e.g. "2026-10-31"
+}
+
+// soldIn reports whether the product is sold in the store.
+func (p Product) soldIn(storeID string) bool {
+	return len(p.StoreIDs) == 0 || slices.Contains(p.StoreIDs, storeID)
 }
 
 func newCatalog() *Catalog {
@@ -170,7 +178,7 @@ func (c *Catalog) register(mux *http.ServeMux, s *Server) {
 		var found []map[string]any
 		term := strings.ToLower(body.SearchTerm)
 		for _, p := range c.Products {
-			if len(p.StoreIDs) > 0 && !slices.Contains(p.StoreIDs, storeID) {
+			if !p.soldIn(storeID) {
 				continue
 			}
 			// Like the real API, an unknown field (search_text) is ignored and
@@ -182,7 +190,7 @@ func (c *Catalog) register(mux *http.ServeMux, s *Server) {
 				continue
 			}
 			// Unknown ids are left out without an error.
-			if len(body.ProductIDs) > 0 && !slices.Contains(body.ProductIDs, p.ID) {
+			if !c.IgnoreProductIDs && len(body.ProductIDs) > 0 && !slices.Contains(body.ProductIDs, p.ID) {
 				continue
 			}
 			found = append(found, p.json())
