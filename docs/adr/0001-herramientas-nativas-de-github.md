@@ -14,6 +14,9 @@ Cada SaaS es otra cuenta, otro token con acceso al repo y otro sitio donde mirar
 
 - Se usan las **herramientas nativas de GitHub** siempre que se pueda: Actions, CodeQL, Dependabot, secret scanning con push protection, artifact attestations y rulesets. **Ningún servicio SaaS.**
 - **Actions permitidas**: solo las oficiales de GitHub (`actions/*`, `github/codeql-action`) y las oficiales de cada herramienta (`golangci/golangci-lint-action`, `ossf/scorecard-action`, `goreleaser/goreleaser-action`). Lo que haría una action de la comunidad (informes, comentarios en el PR, avisos) se hace con scripts versionados en `scripts/ci/` y `gh`. Las herramientas sin action oficial se ejecutan desde su binario o módulo oficial con versión fija: gitleaks se descarga de su release y se verifica con un SHA-256 fijado en el workflow; `actionlint` y `govulncheck` se ejecutan con `go run módulo@versión`, que verifica el módulo contra `sum.golang.org`.
+- **Excepciones** a esa lista, con su motivo:
+  - `dependabot/fetch-metadata` (en `dependabot-automerge.yml`): no es de `actions/*` ni de una herramienta, pero la spec la nombra para leer el tipo de actualización de Dependabot, y la mantiene GitHub.
+  - `actions/attest` en vez de `actions/attest-sbom`, que la spec nombra para las attestations de SBOM: GitHub ha deprecado `actions/attest-sbom` en favor de `actions/attest`, que hace lo mismo con `sbom-path`. Ambas son oficiales.
 - Todas las actions se **fijan por el SHA completo del commit**, con la versión en un comentario (`uses: actions/checkout@<sha> # v7.0.1`). Dependabot las actualiza.
 - Cada workflow declara `permissions: contents: read` a nivel de workflow y amplía permisos solo en el job que los necesita. `actions/checkout` va con `persist-credentials: false`.
 
