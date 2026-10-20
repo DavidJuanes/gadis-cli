@@ -99,6 +99,12 @@ Los tests copian la sesión a un directorio temporal y no modifican `GADIS_TEST_
 
 Las releases se publican con GoReleaser al subir una etiqueta `v*`.
 
+## Calidad y seguridad
+
+### Dependencias
+
+Dependabot revisa cada semana los módulos de Go y las actions (`.github/dependabot.yml`). Las actualizaciones minor y patch llegan agrupadas en un PR por ecosistema y se ponen en auto-merge (squash): se mergean solas cuando pasan los checks obligatorios. Las major llegan en PRs separados y se revisan a mano.
+
 ### Verificar una release
 
 Cada release incluye `checksums.txt`, un SBOM en SPDX JSON por archivo (`<archivo>.sbom.json`, generado con syft) y attestations de procedencia y de SBOM firmadas en el CI de este repo. `install.sh` comprueba siempre el SHA-256 y, si tienes [`gh`](https://cli.github.com), también la attestation; si falla cualquiera de las dos, no instala nada. Para verificar a mano un archivo descargado:
