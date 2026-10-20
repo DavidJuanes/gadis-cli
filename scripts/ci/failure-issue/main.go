@@ -4,7 +4,7 @@
 //
 // It is meant to run as the last job of a scheduled workflow:
 //
-//	go run ./scripts/ci/failure-issue --status "${{ needs.<job>.result }}"
+//	go run ./scripts/ci/failure-issue --status "${{ needs.<job>.result }} ..."
 //
 // with GH_TOKEN set and the standard GITHUB_* variables of Actions.
 package main
@@ -31,8 +31,12 @@ func main() {
 
 func run(args []string, getenv func(string) string) error {
 	fs := flag.NewFlagSet("failure-issue", flag.ContinueOnError)
-	status := fs.String("status", "", "result of the watched job: success, failure, cancelled or skipped")
+	statuses := fs.String("status", "", "results of the watched jobs, separated by spaces: success, failure, cancelled or skipped")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	status, err := combine(strings.Fields(*statuses))
+	if err != nil {
 		return err
 	}
 
@@ -45,7 +49,7 @@ func run(args []string, getenv func(string) string) error {
 	marker := fmt.Sprintf("<!-- failure-issue: %s -->", workflow)
 
 	ctx := context.Background()
-	switch *status {
+	switch status {
 	case "failure":
 		open, err := findOpenIssue(ctx, marker)
 		if err != nil {
@@ -67,12 +71,34 @@ func run(args []string, getenv func(string) string) error {
 		}
 		return gh(ctx, "", "issue", "close", strconv.Itoa(open),
 			"--comment", fmt.Sprintf("Vuelve a pasar: %s\n", runURL))
-	case "cancelled", "skipped":
-		// Says nothing about the health of the workflow.
+	default: // cancelled or skipped: says nothing about the health of the workflow.
 		return nil
-	default:
-		return fmt.Errorf("unknown --status %q (want success, failure, cancelled or skipped)", *status)
 	}
+}
+
+// combine turns the results of the watched jobs into the workflow's: failure
+// if any failed, else cancelled if any was cancelled, else success if any
+// passed, else skipped (none ran). A workflow whose jobs run one or another,
+// as integration.yml, gets the result of the one that ran.
+func combine(results []string) (string, error) {
+	if len(results) == 0 {
+		return "", errors.New("--status is required")
+	}
+	seen := map[string]bool{}
+	for _, r := range results {
+		switch r {
+		case "success", "failure", "cancelled", "skipped":
+			seen[r] = true
+		default:
+			return "", fmt.Errorf("unknown --status %q (want success, failure, cancelled or skipped)", r)
+		}
+	}
+	for _, r := range []string{"failure", "cancelled", "success"} {
+		if seen[r] {
+			return r, nil
+		}
+	}
+	return "skipped", nil
 }
 
 func failureBody(workflow, runURL, marker string) string {

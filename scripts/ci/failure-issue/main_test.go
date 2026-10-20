@@ -126,6 +126,44 @@ func TestNothingToDo(t *testing.T) {
 	}
 }
 
+// integration.yml passes the results of its two jobs, catalog and account;
+// only one of them runs, the other is skipped.
+func TestSeveralResultsAreTheResultOfTheJobThatRan(t *testing.T) {
+	cases := []struct {
+		name, fixture, status, want string
+	}{
+		{"only active job failed", "no-issues.json", "skipped failure", "create"},
+		{"only active job passed", "open-issues.json", "success skipped", "close"},
+		{"only active job was cancelled", "open-issues.json", "skipped cancelled", ""},
+		{"both skipped", "open-issues.json", "skipped skipped", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := fakegh.Install(t, tc.fixture)
+			if err := run([]string{"--status", tc.status}, runEnv("vuln-scheduled")); err != nil {
+				t.Fatal(err)
+			}
+			w := fake.Writes()
+			if tc.want == "" {
+				if len(w) != 0 {
+					t.Fatalf("want no write calls, got %+v", w)
+				}
+				return
+			}
+			if len(w) != 1 || w[0].Args[1] != tc.want {
+				t.Fatalf("want issue %s, got %+v", tc.want, w)
+			}
+		})
+	}
+}
+
+func TestUnknownResultAmongSeveralIsAnError(t *testing.T) {
+	fakegh.Install(t, "no-issues.json")
+	if err := run([]string{"--status", "skipped flaky"}, runEnv("vuln-scheduled")); err == nil {
+		t.Fatal("want error for unknown status")
+	}
+}
+
 func TestUnknownStatusIsAnError(t *testing.T) {
 	fakegh.Install(t, "no-issues.json")
 	if err := run([]string{"--status", "flaky"}, runEnv("vuln-scheduled")); err == nil {
