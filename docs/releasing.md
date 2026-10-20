@@ -132,10 +132,12 @@ gh attestation verify "$dir/gadis_X.Y.Z_linux_amd64.tar.gz" --repo DavidJuanes/g
 **`go install` con el tag**:
 
 ```bash
-GOBIN="$(mktemp -d)" go install github.com/DavidJuanes/gadis-cli/cmd/gadis@vX.Y.Z
+bin="$(mktemp -d)"
+GOBIN="$bin" go install github.com/DavidJuanes/gadis-cli/cmd/gadis@vX.Y.Z
+"$bin/gadis" --version                                        # gadis version X.Y.Z
 ```
 
-Tiene que compilar. El binario de `go install` dice `gadis version dev`: la versión solo la inyecta GoReleaser con `-ldflags`.
+Tiene que compilar. Sin el `-ldflags` de GoReleaser, `gadis --version` toma la versión del módulo que Go apunta en el binario (`vX.Y.Z`) y la muestra sin la `v`, igual que el de la release. Un `go build` en un clon muestra en su lugar una pseudo-versión (`0.0.0-FECHA-COMMIT`, con `+dirty` si hay cambios sin commit).
 
 ## Si la release falla
 
