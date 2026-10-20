@@ -24,6 +24,14 @@ checksum:
 changelog:
   use: github
 
+# Con las immutable releases activadas, una release publicada ya no admite archivos nuevos.
+# GoReleaser la crea como borrador, sube todo y la publica al final (no hay que tocar `draft`).
+# El preflight comprueba antes de compilar que el token puede publicar y que el tag no tiene ya
+# una release inmutable; con fail_on_error para en vez de solo avisar.
+release:
+  preflight:
+    fail_on_error: true
+
 # Un SBOM (SPDX JSON, con syft) por archivo, adjunto a la release como <archivo>.sbom.json.
 sboms:
   - artifacts: archive

@@ -8,7 +8,8 @@ set -eu
 repo=DavidJuanes/gadis-cli
 
 # gh falso: solo entiende `gh api [-X MÉTODO] RUTA [--input F] [--jq EXPR] [--paginate]`.
-# Estado en $FAKE_GH_STATE: rulesets.json (lista) y ruleset-ID.json (cada ruleset),
+# Estado en $FAKE_GH_STATE: rulesets.json (lista de {id, name, target}; el GET filtra por
+# ?targets=, que por defecto es branch) y ruleset-ID.json (cada ruleset),
 # env-integration.json (el Environment) y policies.json (sus reglas de ramas de despliegue).
 # Cada llamada se registra en $FAKE_GH_STATE/calls como "MÉTODO RUTA".
 ghbin="$work/ghbin"
@@ -55,19 +56,24 @@ out() {
 [ -f "$s/policies.json" ] || echo '[]' >"$s/policies.json"
 policies="repos/$FAKE_GH_REPO/environments/integration/deployment-branch-policies"
 case "$method ${path%%\?*}" in
-  "GET repos/$FAKE_GH_REPO/rulesets") out <"$s/rulesets.json" ;;
+  "GET repos/$FAKE_GH_REPO/rulesets")
+    # Como GitHub, sin ?targets= solo lista los de rama.
+    targets="$(echo "$path" | sed -n 's/.*[?&]targets=\([^&]*\).*/\1/p')"
+    jq --arg t "${targets:-branch}" '[.[] | select(.target as $x | $t | split(",") | index($x))]' \
+      "$s/rulesets.json" | out ;;
   "POST repos/$FAKE_GH_REPO/rulesets")
     id=$(( $(jq length "$s/rulesets.json") + 100 ))
     jq --argjson id "$id" '. + {id: $id}' "$body" >"$s/ruleset-$id.json"
-    jq --argjson id "$id" --arg name "$(jq -r .name "$body")" '. + [{id: $id, name: $name}]' \
+    jq --argjson id "$id" --slurpfile b "$body" \
+      '. + [{id: $id, name: $b[0].name, target: ($b[0].target // "branch")}]' \
       "$s/rulesets.json" >"$s/tmp" && mv "$s/tmp" "$s/rulesets.json"
-    cp "$body" "$s/body-post-ruleset"
+    cp "$body" "$s/body-post-ruleset-$(jq -r .name "$body")"
     out <"$s/ruleset-$id.json" ;;
   "PUT repos/$FAKE_GH_REPO/rulesets/"*)
     id="${path##*/}"
     [ -f "$s/ruleset-$id.json" ] || { echo "gh falso: ruleset $id no existe" >&2; exit 1; }
     jq --argjson id "$id" '. + {id: $id}' "$body" >"$s/ruleset-$id.json"
-    cp "$body" "$s/body-put-ruleset"
+    cp "$body" "$s/body-put-ruleset-$(jq -r .name "$body")"
     out <"$s/ruleset-$id.json" ;;
   "PATCH repos/$FAKE_GH_REPO")
     [ -f "$s/repo.json" ] || echo '{}' >"$s/repo.json"
@@ -77,7 +83,8 @@ case "$method ${path%%\?*}" in
   "GET repos/$FAKE_GH_REPO") out <"$s/repo.json" ;;
   "PUT repos/$FAKE_GH_REPO/private-vulnerability-reporting" | \
     "PUT repos/$FAKE_GH_REPO/vulnerability-alerts" | \
-    "PUT repos/$FAKE_GH_REPO/automated-security-fixes")
+    "PUT repos/$FAKE_GH_REPO/automated-security-fixes" | \
+    "PUT repos/$FAKE_GH_REPO/immutable-releases")
     touch "$s/enabled-${path##*/}" ;;
   "PUT repos/$FAKE_GH_REPO/environments/integration")
     jq '{name: "integration"} + .' "$body" >"$s/env-integration.json"
@@ -116,19 +123,45 @@ name=creates_ruleset
 run "$name"
 [ "$(status)" = 0 ] || fail "sale con $(status), se esperaba 0"
 called "POST repos/$repo/rulesets" || fail "no crea el ruleset"
-cmp -s "$(state)/body-post-ruleset" "$root/.github/rulesets/main.json" ||
+cmp -s "$(state)/body-post-ruleset-main" "$root/.github/rulesets/main.json" ||
   fail "no envía .github/rulesets/main.json al crear el ruleset"
+
+# Los tags v* tienen dos rulesets, porque el bypass vale para todo un ruleset: en uno solo el
+# admin crea tags; en el otro, sin bypass, nadie los actualiza ni los borra.
+name=creates_tag_rulesets
+run "$name"
+[ "$(status)" = 0 ] || fail "sale con $(status), se esperaba 0"
+tags="$(jq -c '[.[] | select(.target == "tag")]' "$(state)/rulesets.json")"
+[ "$(echo "$tags" | jq length)" = 2 ] || fail "no crea dos rulesets de tags: $tags"
+for id in $(echo "$tags" | jq -r '.[].id'); do
+  r="$(state)/ruleset-$id.json"
+  got="$(jq -c '.conditions.ref_name.include' "$r")"
+  [ "$got" = '["refs/tags/v*"]' ] || fail "el ruleset $id no cubre refs/tags/v*: $got"
+  [ "$(jq -r .enforcement "$r")" = active ] || fail "el ruleset $id no está activo"
+done
+got="$(jq -cs '[.[] | select(.target == "tag" and any(.rules[]; .type == "creation"))
+  | {rules: [.rules[].type], bypass: [.bypass_actors[] | "\(.actor_type):\(.actor_id):\(.bypass_mode)"]}]' \
+  "$(state)"/ruleset-*.json)"
+[ "$got" = '[{"rules":["creation"],"bypass":["RepositoryRole:5:always"]}]' ] ||
+  fail "crear tags v* no queda restringido al admin: $got"
+got="$(jq -cs '[.[] | select(.target == "tag" and any(.rules[]; .type == "update"))
+  | {bypass: .bypass_actors, rules: ([.rules[].type] | sort)}]' "$(state)"/ruleset-*.json)"
+echo "$got" | jq -e 'length == 1 and .[0].bypass == []
+  and (.[0].rules | index("update") and index("deletion"))' >/dev/null ||
+  fail "actualizar y borrar tags v* no queda bloqueado sin bypass: $got"
 
 # Ya hay un ruleset "main" (id 7) y otro ajeno: se actualiza el suyo, no se crea otro.
 name=updates_existing_ruleset
 mkdir -p "$(state)"
-echo '[{"id": 3, "name": "otro"}, {"id": 7, "name": "main"}]' >"$(state)/rulesets.json"
+echo '[{"id": 3, "name": "otro", "target": "branch"}, {"id": 7, "name": "main", "target": "branch"}]' \
+  >"$(state)/rulesets.json"
 echo '{"id": 7, "name": "main", "rules": []}' >"$(state)/ruleset-7.json"
 run "$name"
 [ "$(status)" = 0 ] || fail "sale con $(status), se esperaba 0"
-! called "POST repos/$repo/rulesets" || fail "crea un ruleset nuevo en vez de actualizar el existente"
+[ "$(jq '[.[] | select(.name == "main")] | length' "$(state)/rulesets.json")" = 1 ] ||
+  fail "crea un ruleset main nuevo en vez de actualizar el existente"
 called "PUT repos/$repo/rulesets/7" || fail "no actualiza el ruleset 7"
-cmp -s "$(state)/body-put-ruleset" "$root/.github/rulesets/main.json" ||
+cmp -s "$(state)/body-put-ruleset-main" "$root/.github/rulesets/main.json" ||
   fail "no envía .github/rulesets/main.json al actualizar el ruleset"
 
 name=applies_repo_settings
@@ -141,7 +174,8 @@ got="$(jq -cS '{allow_squash_merge, allow_merge_commit, allow_rebase_merge, dele
   validity_checks: .security_and_analysis.secret_scanning_validity_checks.status}' \
   "$(state)/body-patch-repo" 2>/dev/null || true)"
 [ "$got" = "$expected" ] || fail "ajustes del repo: $got"
-for f in private-vulnerability-reporting vulnerability-alerts automated-security-fixes; do
+for f in private-vulnerability-reporting vulnerability-alerts automated-security-fixes \
+  immutable-releases; do
   [ -f "$(state)/enabled-$f" ] || fail "no activa $f"
 done
 # Las actualizaciones de seguridad de Dependabot exigen las alertas activadas antes.
@@ -159,10 +193,12 @@ cp "$(state)"/rulesets.json "$(state)"/ruleset-*.json "$(state)"/repo.json \
   "$(state)"/env-integration.json "$(state)"/policies.json "$work/snap/"
 run "$name"
 [ "$(status)" = 0 ] || fail "la segunda ejecución sale con $(status)"
-[ "$(count "POST repos/$repo/rulesets")" = 1 ] || fail "crea el ruleset más de una vez"
-id="$(jq -r '.[0].id' "$(state)/rulesets.json")"
-[ "$(count "PUT repos/$repo/rulesets/$id")" = 1 ] || fail "la segunda ejecución no actualiza el ruleset $id"
-[ "$(jq length "$(state)/rulesets.json")" = 1 ] || fail "hay más de un ruleset"
+n="$(ls "$root"/.github/rulesets/*.json | wc -l)"
+[ "$(count "POST repos/$repo/rulesets")" = "$n" ] || fail "crea algún ruleset más de una vez"
+for id in $(jq -r '.[].id' "$(state)/rulesets.json"); do
+  [ "$(count "PUT repos/$repo/rulesets/$id")" = 1 ] || fail "la segunda ejecución no actualiza el ruleset $id"
+done
+[ "$(jq length "$(state)/rulesets.json")" = "$n" ] || fail "hay rulesets duplicados"
 for f in "$work"/snap/*; do
   cmp -s "$f" "$(state)/${f##*/}" || fail "el estado cambia en la segunda ejecución: ${f##*/}"
 done

@@ -137,7 +137,7 @@ Cada PR y cada push a `main` pasan por [`ci.yml`](.github/workflows/ci.yml), con
 | `secrets` | [gitleaks](https://github.com/gitleaks/gitleaks) sobre todo el historial, con [`.gitleaks.toml`](.gitleaks.toml) |
 | `build` | `goreleaser build --snapshot` para las 6 plataformas de la release |
 | `install-sh` | `scripts/test-install.sh`: que `install.sh` aborta si el checksum o la attestation no cuadran |
-| `repo-settings` | `scripts/test-repo-settings.sh`: que `scripts/repo-settings.sh` crea o actualiza el ruleset sin duplicarlo, que el Environment `integration` solo admite `main` y que los checks que exige son jobs que existen |
+| `repo-settings` | `scripts/test-repo-settings.sh`: que `scripts/repo-settings.sh` crea o actualiza los rulesets (`main` y tags `v*`) sin duplicarlos, que activa las *immutable releases*, que el Environment `integration` solo admite `main` y que los checks que exige son jobs que existen |
 | `release-guard` | `scripts/test-release-guard.sh`: que `scripts/release-guard.sh`, el primer paso de `release.yml`, aborta si el tag no es `vX.Y.Z` estricto o si su commit no está en `main` |
 | `badges` | Solo en push a `main`: [`scripts/ci/badges`](scripts/ci/badges) genera `coverage.json`, `tests.json` y `vulns.json` (formato *endpoint* de shields.io) a partir de los resultados de `test` y `vuln` y los publica en la rama huérfana `badges` en un único commit que reemplaza al anterior ([ADR-0002](docs/adr/0002-kpis-en-la-rama-badges.md)). De ahí salen los badges de KPIs y la cobertura de `main` del comentario de los PR |
 
@@ -184,7 +184,9 @@ gh attestation verify gadis_X.Y.Z_linux_amd64.tar.gz --repo DavidJuanes/gadis-cl
 
 `main` solo cambia por PR (squash, sin aprobaciones obligatorias) con los checks `test`, `lint`, `vuln`, `secrets`, `build` y `analyze` (CodeQL) en verde y sin alertas de CodeQL de severidad *high* o superior. Tiene historial lineal y no admite force-push ni borrado. Los administradores pueden saltarse el ruleset.
 
-El ruleset vive en [`.github/rulesets/main.json`](.github/rulesets/main.json). [`scripts/repo-settings.sh`](scripts/repo-settings.sh) lo crea o lo actualiza con `gh api` y aplica el resto de ajustes: solo squash merge, borrar la rama al mergear, auto-merge, reporte privado de vulnerabilidades, secret scanning con push protection y validity checks, alertas y actualizaciones de seguridad de Dependabot, y el Environment `integration` restringido a la rama `main`. Se puede ejecutar las veces que haga falta:
+Los tags `v*` y las releases publicadas son inmutables. Solo un administrador puede crear un tag `v*` y nadie, tampoco un administrador, puede moverlo ni borrarlo. Como el *bypass* vale para todo un ruleset, son dos: `tags-v-creacion` (crear, con *bypass* para el admin) y `tags-v-inmutables` (actualizar y borrar, sin *bypass*). Las *immutable releases* están activadas: los archivos de una release publicada no se pueden sustituir. GoReleaser crea la release como borrador, sube todos los archivos y la publica al final, así que no choca con ellas.
+
+Los rulesets viven en [`.github/rulesets/`](.github/rulesets/). [`scripts/repo-settings.sh`](scripts/repo-settings.sh) los crea o los actualiza (por nombre y *target*) con `gh api` y aplica el resto de ajustes: solo squash merge, borrar la rama al mergear, auto-merge, reporte privado de vulnerabilidades, secret scanning con push protection y validity checks, alertas y actualizaciones de seguridad de Dependabot, *immutable releases* y el Environment `integration` restringido a la rama `main`. Se puede ejecutar las veces que haga falta:
 
 ```bash
 sh scripts/repo-settings.sh DavidJuanes/gadis-cli   # necesita gh con permisos de admin sobre el repo
