@@ -110,7 +110,7 @@ func (se *Session) loggedIn(r *http.Request) bool {
 }
 
 func (se *Session) register(mux *http.ServeMux, s *Server) {
-	mux.HandleFunc("GET /api/auth/csrf", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/auth/csrf", func(w http.ResponseWriter, _ *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "__Host-next-auth.csrf-token", Value: "csrf|hash", Path: "/", Secure: true})
 		fmt.Fprint(w, `{"csrfToken":"csrf"}`)
 	})
@@ -119,9 +119,9 @@ func (se *Session) register(mux *http.ServeMux, s *Server) {
 			http.Error(w, "bad signin", 400)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"url": s.URL() + keycloakPrefix + "/protocol/openid-connect/auth?client_id=gadisline"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"url": s.URL() + keycloakPrefix + "/protocol/openid-connect/auth?client_id=gadisline"})
 	})
-	mux.HandleFunc("GET "+keycloakPrefix+"/protocol/openid-connect/auth", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET "+keycloakPrefix+"/protocol/openid-connect/auth", func(w http.ResponseWriter, _ *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "AUTH_SESSION_ID", Value: "kc", Path: keycloakPrefix + "/"})
 		fmt.Fprint(w, `<html><body><form id="loginForm" action="/realms/gadisline/login-actions/authenticate?session_code=x&amp;execution=y" method="post">
 			<input name="username" type="text"><input name="password" type="password">
@@ -165,7 +165,7 @@ func (se *Session) register(mux *http.ServeMux, s *Server) {
 		se.setSessionCookies(w)
 		http.Redirect(w, r, "/", http.StatusFound)
 	})
-	mux.HandleFunc("GET /api/auth/error", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/auth/error", func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "This action with HTTP POST is not supported by NextAuth.js", 400)
 	})
 	mux.HandleFunc("GET /api/auth/session", func(w http.ResponseWriter, r *http.Request) {
@@ -178,16 +178,16 @@ func (se *Session) register(mux *http.ServeMux, s *Server) {
 		// session cookies.
 		se.rotation++
 		se.setSessionCookies(w)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"expires": time.Now().Add(sessionMaxAge * time.Second).UTC().Format(time.RFC3339),
 			"token":   map[string]string{"accessToken": se.accessToken()},
 		})
 	})
-	mux.HandleFunc("POST /api/auth/signout", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/auth/signout", func(w http.ResponseWriter, _ *http.Request) {
 		for _, name := range []string{SessionCookie + ".0", SessionCookie + ".1"} {
 			http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", Secure: true, MaxAge: -1})
 		}
-		json.NewEncoder(w).Encode(map[string]string{"url": s.URL() + "/"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"url": s.URL() + "/"})
 	})
 	mux.HandleFunc("GET "+clientsPrefix+"/clients/{id}/default-delivery", func(w http.ResponseWriter, r *http.Request) {
 		if !requireSite(w, r) {
@@ -203,7 +203,7 @@ func (se *Session) register(mux *http.ServeMux, s *Server) {
 			http.Error(w, `{"message":"Forbidden"}`, http.StatusForbidden)
 			return
 		}
-		json.NewEncoder(w).Encode(se.DefaultDelivery) // an object, not a list
+		_ = json.NewEncoder(w).Encode(se.DefaultDelivery) // an object, not a list
 	})
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer s.lock()()

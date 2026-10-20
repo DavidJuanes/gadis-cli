@@ -19,7 +19,7 @@ import (
 var ErrNotLoggedIn = errors.New("no hay sesión en Gadisline: ejecuta `gadis login`")
 
 // ErrCodeRequired means Keycloak asked for a one-time code after the password.
-var ErrCodeRequired = errors.New("Gadisline pide un código de verificación")
+var ErrCodeRequired = errors.New("Gadisline pide un código de verificación") //nolint:staticcheck // ST1005: "Gadisline" is a proper noun
 
 // LoginChallenge is a Keycloak form that asks for a one-time code.
 type LoginChallenge struct {
@@ -289,7 +289,7 @@ func (c *Client) fetchPage(ctx context.Context, method, target string, form url.
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

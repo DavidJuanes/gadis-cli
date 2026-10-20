@@ -53,12 +53,12 @@ func Save(dir string, c Config) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) //nolint:gosec // G304: p is config.toml under GADIS_HOME, chosen by the user
 	if err != nil {
 		return err
 	}
 	if err := toml.NewEncoder(f).Encode(c); err != nil {
-		f.Close()
+		_ = f.Close() // the encode error is the one worth reporting
 		return err
 	}
 	return f.Close()

@@ -147,7 +147,7 @@ func (c *Catalog) register(mux *http.ServeMux, s *Server) {
 		for _, cat := range c.Categories {
 			cats = append(cats, cat.json())
 		}
-		json.NewEncoder(w).Encode(map[string]any{"categories": cats})
+		_ = json.NewEncoder(w).Encode(map[string]any{"categories": cats})
 	})
 
 	mux.HandleFunc("POST "+catalogPrefix+"/catalog/products/search", func(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +197,7 @@ func (c *Catalog) register(mux *http.ServeMux, s *Server) {
 		}
 		total := len(found)
 		from, to := min(page*perPage, total), min((page+1)*perPage, total)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"page": map[string]int{
 				"number": page, "rows_per_page": perPage,
 				"total_pages": (total + perPage - 1) / perPage, "total_elements": total,

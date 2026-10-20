@@ -76,7 +76,7 @@ cookies y lo cierra.`,
 			password = ""
 			for tries := 0; errors.Is(err, gadis.ErrCodeRequired); tries++ {
 				if !interactive {
-					return errors.New("Gadisline pide un código de verificación y no hay terminal para pedirlo: usa `gadis login --browser`")
+					return errors.New("Gadisline pide un código de verificación y no hay terminal para pedirlo: usa `gadis login --browser`") //nolint:staticcheck // ST1005: "Gadisline" is a proper noun
 				}
 				if tries == 3 {
 					return errors.New("demasiados intentos con el código de verificación")

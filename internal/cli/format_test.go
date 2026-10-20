@@ -27,7 +27,7 @@ func TestAmount(t *testing.T) {
 			t.Errorf("amount(%v) = %q, want %q", in, got, want)
 		}
 	}
-	for in, want := range map[string]float64{"3": 3, "1.5": 1.5, "1,5": 1.5, " 2 ": 2} {
+	for in, want := range map[string]float64{"3": 3, "1.5": 1.5, "1,5": 1.5, " 2 ": 2} { //nolint:gocritic // mapKey: the padded " 2 " is the input under test
 		got, err := parseAmount(in)
 		if err != nil || got != want {
 			t.Errorf("parseAmount(%q) = %v, %v; want %v", in, got, err, want)

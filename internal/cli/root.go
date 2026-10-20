@@ -105,7 +105,7 @@ se guarda en ~/.gadis/session.json y dura unos 30 días.`,
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+		PersistentPreRunE: func(*cobra.Command, []string) error {
 			return a.init()
 		},
 	}

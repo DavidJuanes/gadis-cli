@@ -82,7 +82,7 @@ go build ./cmd/gadis
 
 ### Tests de integración
 
-Ejecutan el CLI contra el backend real de Gadisline para detectar cambios en su API privada. Van detrás de la etiqueta `integration`, así que ni `go test ./...` ni el CI los compilan. Se lanzan a mano:
+Ejecutan el CLI contra el backend real de Gadisline para detectar cambios en su API privada. Van detrás de la etiqueta `integration`, así que `go test ./...` no los ejecuta (el lint del CI sí los revisa). Se lanzan a mano:
 
 ```bash
 go test -tags integration ./...
@@ -98,6 +98,34 @@ GADIS_TEST_HOME=~/.gadis-test go test -tags integration ./...
 Los tests copian la sesión a un directorio temporal y no modifican `GADIS_TEST_HOME`. Hacen pocas peticiones y en serie, y no comprueban precios ni productos concretos, solo formas e invariantes.
 
 Las releases se publican con GoReleaser al subir una etiqueta `v*`.
+
+## Calidad y seguridad
+
+Cada PR y cada push a `main` pasan por [`ci.yml`](.github/workflows/ci.yml), con estos jobs:
+
+| Job | Qué comprueba |
+| --- | --- |
+| `test` | `go test ./...` |
+| `lint` | [golangci-lint](https://golangci-lint.run) con [`.golangci.yml`](.golangci.yml), [actionlint](https://github.com/rhysd/actionlint) sobre `.github/workflows` y que `go mod tidy` no cambie nada |
+| `vuln` | [govulncheck](https://go.dev/doc/security/vuln/) sobre las dependencias que el código usa de verdad |
+| `secrets` | [gitleaks](https://github.com/gitleaks/gitleaks) sobre todo el historial, con [`.gitleaks.toml`](.gitleaks.toml) |
+| `build` | `goreleaser build --snapshot` para las 6 plataformas de la release |
+
+Solo se usan herramientas nativas de GitHub y actions oficiales fijadas por SHA, sin servicios externos ([ADR-0001](docs/adr/0001-herramientas-nativas-de-github.md)).
+
+Para pasar el CI a la primera, ejecuta lo mismo en local:
+
+```bash
+go test ./...
+golangci-lint run                  # golangci-lint v2
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+go mod tidy && git diff --exit-code -- go.mod go.sum
+go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+gitleaks git                       # gitleaks v8
+goreleaser build --snapshot --clean
+```
+
+Un falso positivo de gitleaks se declara en `.gitleaks.toml` para esa regla y esa ruta, nunca con una excepción global. Si se filtra un secreto de verdad, se rota.
 
 ## Licencia
 
