@@ -138,6 +138,7 @@ Cada PR y cada push a `main` pasan por [`ci.yml`](.github/workflows/ci.yml), con
 | `build` | `goreleaser build --snapshot` para las 6 plataformas de la release |
 | `install-sh` | `scripts/test-install.sh`: que `install.sh` aborta si el checksum o la attestation no cuadran |
 | `repo-settings` | `scripts/test-repo-settings.sh`: que `scripts/repo-settings.sh` crea o actualiza el ruleset sin duplicarlo, que el Environment `integration` solo admite `main` y que los checks que exige son jobs que existen |
+| `release-guard` | `scripts/test-release-guard.sh`: que `scripts/release-guard.sh`, el primer paso de `release.yml`, aborta si el tag no es `vX.Y.Z` estricto o si su commit no está en `main` |
 | `badges` | Solo en push a `main`: [`scripts/ci/badges`](scripts/ci/badges) genera `coverage.json`, `tests.json` y `vulns.json` (formato *endpoint* de shields.io) a partir de los resultados de `test` y `vuln` y los publica en la rama huérfana `badges` en un único commit que reemplaza al anterior ([ADR-0002](docs/adr/0002-kpis-en-la-rama-badges.md)). De ahí salen los badges de KPIs y la cobertura de `main` del comentario de los PR |
 
 Solo se usan herramientas nativas de GitHub y actions oficiales fijadas por SHA, sin servicios externos ([ADR-0001](docs/adr/0001-herramientas-nativas-de-github.md)).

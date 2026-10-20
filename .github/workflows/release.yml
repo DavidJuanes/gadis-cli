@@ -25,6 +25,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # Antes que nada: solo se publica un tag vX.Y.Z cuyo commit está en main.
+      - name: Guarda de la release
+        run: sh scripts/release-guard.sh "$TAG"
+        env:
+          TAG: ${{ github.ref_name }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
