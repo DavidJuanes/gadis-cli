@@ -51,8 +51,16 @@ func GuardCart(t testing.TB, cart Cart) []CartLine {
 
 // restoreCart sets back the lines that differ from want, removes the ones
 // that weren't there, and reads the cart back to check it.
+//
+// For a private cart (see privacyMarker) the errors never name its products or
+// amounts, only how many lines it had and what failed.
 func restoreCart(cart Cart, want []CartLine) error {
-	wanted := fmt.Sprintf("the cart had: %s", formatLines(want))
+	private := isPrivate(cart)
+	lines := formatLines
+	if private {
+		lines = countLines
+	}
+	wanted := fmt.Sprintf("the cart had: %s", lines(want))
 	got, err := cart.Lines()
 	if err != nil {
 		return fmt.Errorf("%w; %s", err, wanted)
@@ -60,6 +68,10 @@ func restoreCart(cart Cart, want []CartLine) error {
 	var errs []error
 	for _, c := range cartChanges(got, want) {
 		if err := cart.Set(c.ProductID, c.Amount); err != nil {
+			if private {
+				errs = append(errs, fmt.Errorf("setting a line: %w", err))
+				continue
+			}
 			errs = append(errs, fmt.Errorf("%s → %s: %w", c.ProductID, formatAmount(c.Amount), err))
 		}
 	}
@@ -70,9 +82,25 @@ func restoreCart(cart Cart, want []CartLine) error {
 		return fmt.Errorf("%w; %s", err, wanted)
 	}
 	if left := cartChanges(got, want); len(left) > 0 {
-		return fmt.Errorf("after restoring it has %s; %s", formatLines(got), wanted)
+		return fmt.Errorf("after restoring it has %s; %s", lines(got), wanted)
 	}
 	return nil
+}
+
+// privacyMarker is a Cart whose lines are personal data (the maintainer's real
+// cart): errors about it never show them.
+type privacyMarker interface{ Private() bool }
+
+func isPrivate(cart Cart) bool {
+	p, ok := cart.(privacyMarker)
+	return ok && p.Private()
+}
+
+func countLines(ls []CartLine) string {
+	if len(ls) == 1 {
+		return "1 line (hidden: personal data)"
+	}
+	return fmt.Sprintf("%d lines (hidden: personal data)", len(ls))
 }
 
 // cartChanges are the amounts to set to go from the lines got to want.
@@ -129,10 +157,21 @@ type cliCart struct {
 	c *CLI
 }
 
+// Private reports whether the cart is personal data: that of a private CLI.
+func (cc cliCart) Private() bool { return cc.c.Private }
+
+// stderr is what a failed run printed on stderr, unless the CLI is private.
+func (cc cliCart) stderr(res Result) string {
+	if cc.c.Private {
+		return hidden
+	}
+	return strings.TrimSpace(res.Stderr)
+}
+
 func (cc cliCart) Lines() ([]CartLine, error) {
 	res := cc.c.Run(cc.t, "cart", "--json")
 	if res.Code != 0 {
-		return nil, fmt.Errorf("gadis cart: exit code %d: %s", res.Code, strings.TrimSpace(res.Stderr))
+		return nil, fmt.Errorf("gadis cart: exit code %d: %s", res.Code, cc.stderr(res))
 	}
 	var cart struct {
 		Products []struct {
@@ -141,6 +180,9 @@ func (cc cliCart) Lines() ([]CartLine, error) {
 		} `json:"products"`
 	}
 	if err := json.Unmarshal([]byte(res.Stdout), &cart); err != nil {
+		if cc.c.Private {
+			return nil, fmt.Errorf("gadis cart --json: not the expected JSON (%s)", hidden)
+		}
 		return nil, fmt.Errorf("gadis cart --json: %w", err)
 	}
 	lines := make([]CartLine, len(cart.Products))
@@ -153,7 +195,7 @@ func (cc cliCart) Lines() ([]CartLine, error) {
 func (cc cliCart) Set(productID string, amount float64) error {
 	res := cc.c.Run(cc.t, "cart", "set", productID, formatAmount(amount), "--json")
 	if res.Code != 0 {
-		return fmt.Errorf("exit code %d: %s", res.Code, strings.TrimSpace(res.Stderr))
+		return fmt.Errorf("exit code %d: %s", res.Code, cc.stderr(res))
 	}
 	return nil
 }

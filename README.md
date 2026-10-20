@@ -1,6 +1,7 @@
 # gadis-cli
 
 [![CodeQL](https://github.com/DavidJuanes/gadis-cli/actions/workflows/codeql.yml/badge.svg)](https://github.com/DavidJuanes/gadis-cli/actions/workflows/codeql.yml)
+[![Integración](https://github.com/DavidJuanes/gadis-cli/actions/workflows/integration.yml/badge.svg)](https://github.com/DavidJuanes/gadis-cli/actions/workflows/integration.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/DavidJuanes/gadis-cli/badge)](https://scorecard.dev/viewer/?uri=github.com/DavidJuanes/gadis-cli)
 
 CLI para hacer la compra en [Gadisline](https://www.gadisline.com), la tienda online de los supermercados Gadis: buscar productos, ver categorías y gestionar el carrito de tu cuenta desde la terminal o desde scripts, LLMs y otras automatizaciones.
@@ -85,20 +86,32 @@ go build ./cmd/gadis
 
 ### Tests de integración
 
-Ejecutan el CLI contra el backend real de Gadisline para detectar cambios en su API privada. Van detrás de la etiqueta `integration`, así que `go test ./...` no los ejecuta (el lint del CI sí los revisa). Se lanzan a mano:
+Ejecutan el CLI contra el backend real de Gadisline para detectar cambios en su API privada. Van detrás de la etiqueta `integration`, así que `go test ./...` no los ejecuta (el lint del CI sí los revisa, y `integration.yml` los ejecuta, ver abajo). En local se lanzan a mano:
 
 ```bash
 go test -tags integration ./...
 ```
 
-Los de catálogo (búsqueda, categorías, productos y códigos postales) no necesitan cuenta. Los de cuenta y carrito usan una sesión que preparas tú antes y se saltan si no la hay:
+Los de catálogo (búsqueda, categorías, productos y códigos postales) no necesitan cuenta. Los de cuenta y carrito se activan con `GADIS_INTEGRATION_ACCOUNT=1` y usan una sesión que preparas tú antes; sin la variable se saltan y, con ella, fallan si no hay una sesión válida:
 
 ```bash
 GADIS_HOME=~/.gadis-test gadis login                      # una vez; dura unos 30 días
-GADIS_TEST_HOME=~/.gadis-test go test -tags integration ./...
+GADIS_INTEGRATION_ACCOUNT=1 GADIS_TEST_HOME=~/.gadis-test go test -tags integration ./...
 ```
 
-Los tests copian la sesión a un directorio temporal y no modifican `GADIS_TEST_HOME`. Hacen pocas peticiones y en serie, y no comprueban precios ni productos concretos, solo formas e invariantes.
+Los tests copian la sesión a un directorio temporal y no modifican `GADIS_TEST_HOME`. Hacen pocas peticiones y en serie, y no comprueban precios ni productos concretos, solo formas e invariantes. Los de cuenta y carrito dejan el carrito como estaba y nunca muestran la salida de los comandos ni los datos de la cuenta, ni siquiera al fallar: solo dicen qué aserción ha fallado.
+
+#### En el CI
+
+El workflow `integration.yml` corre los tests de catálogo cada día a las 03:00 UTC, sin sesión ni secretos. Los de cuenta y carrito solo se lanzan a mano, desde `main`, con la cuenta del mantenedor:
+
+```bash
+gh workflow run integration.yml --ref main                      # solo catálogo
+gh workflow run integration.yml --ref main -f cuenta=true       # catálogo, cuenta y carrito
+gh workflow run integration.yml --ref main -f forzar_fallo=true # prueba el aviso (combinable con cuenta)
+```
+
+Con `cuenta`, el job hace `gadis login` sobre un `GADIS_HOME` temporal con los secretos `GADIS_EMAIL` y `GADIS_PASSWORD` del Environment `integration` (restringido a la rama `main`) y corre los tests sin `-v` con `GADIS_INTEGRATION_ACCOUNT=1`. Como los logs de un repo público son públicos, el email y los datos de la cuenta se enmascaran, la salida de `gadis login` no se muestra y no se sube ningún artefacto. Dos ejecuciones nunca coinciden (`concurrency`), y un fallo abre un issue como los workflows programados.
 
 Las releases se publican con GoReleaser al subir una etiqueta `v*`.
 
@@ -116,6 +129,7 @@ Cada PR y cada push a `main` pasan por [`ci.yml`](.github/workflows/ci.yml), con
 | `secrets` | [gitleaks](https://github.com/gitleaks/gitleaks) sobre todo el historial, con [`.gitleaks.toml`](.gitleaks.toml) |
 | `build` | `goreleaser build --snapshot` para las 6 plataformas de la release |
 | `install-sh` | `scripts/test-install.sh`: que `install.sh` aborta si el checksum o la attestation no cuadran |
+| `repo-settings` | `scripts/test-repo-settings.sh`: que `scripts/repo-settings.sh` crea o actualiza el ruleset sin duplicarlo y que los checks que exige son jobs que existen |
 
 Solo se usan herramientas nativas de GitHub y actions oficiales fijadas por SHA, sin servicios externos ([ADR-0001](docs/adr/0001-herramientas-nativas-de-github.md)).
 
@@ -155,6 +169,20 @@ gh attestation verify gadis_X.Y.Z_linux_amd64.tar.gz --repo DavidJuanes/gadis-cl
 gh attestation verify gadis_X.Y.Z_linux_amd64.tar.gz --repo DavidJuanes/gadis-cli \
   --predicate-type https://spdx.dev/Document/v2.3    # attestation del SBOM
 ```
+
+### Gobierno del repo
+
+`main` solo cambia por PR (squash, sin aprobaciones obligatorias) con los checks `test`, `lint`, `vuln`, `secrets`, `build` y `analyze` (CodeQL) en verde y sin alertas de CodeQL de severidad *high* o superior. Tiene historial lineal y no admite force-push ni borrado. Los administradores pueden saltarse el ruleset.
+
+El ruleset vive en [`.github/rulesets/main.json`](.github/rulesets/main.json). [`scripts/repo-settings.sh`](scripts/repo-settings.sh) lo crea o lo actualiza con `gh api` y aplica el resto de ajustes: solo squash merge, borrar la rama al mergear, auto-merge, reporte privado de vulnerabilidades, secret scanning con push protection y validity checks, y alertas y actualizaciones de seguridad de Dependabot. Se puede ejecutar las veces que haga falta:
+
+```bash
+sh scripts/repo-settings.sh DavidJuanes/gadis-cli   # necesita gh con permisos de admin sobre el repo
+```
+
+Si se renombra un job obligatorio hay que cambiar también el ruleset; el job `repo-settings` falla si no coinciden.
+
+Para reportar una vulnerabilidad, mira [`SECURITY.md`](SECURITY.md).
 
 ## Licencia
 
