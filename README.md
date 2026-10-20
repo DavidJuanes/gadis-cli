@@ -99,6 +99,17 @@ Los tests copian la sesión a un directorio temporal y no modifican `GADIS_TEST_
 
 Las releases se publican con GoReleaser al subir una etiqueta `v*`.
 
+### Verificar una release
+
+Cada release incluye `checksums.txt`, un SBOM en SPDX JSON por archivo (`<archivo>.sbom.json`, generado con syft) y attestations de procedencia y de SBOM firmadas en el CI de este repo. `install.sh` comprueba siempre el SHA-256 y, si tienes [`gh`](https://cli.github.com), también la attestation; si falla cualquiera de las dos, no instala nada. Para verificar a mano un archivo descargado:
+
+```bash
+sha256sum --ignore-missing -c checksums.txt          # en macOS: shasum -a 256 --ignore-missing -c checksums.txt
+gh attestation verify gadis_X.Y.Z_linux_amd64.tar.gz --repo DavidJuanes/gadis-cli
+gh attestation verify gadis_X.Y.Z_linux_amd64.tar.gz --repo DavidJuanes/gadis-cli \
+  --predicate-type https://spdx.dev/Document/v2.3    # attestation del SBOM
+```
+
 ## Licencia
 
 [MIT](LICENSE)

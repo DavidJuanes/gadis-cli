@@ -5,11 +5,19 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  SYFT_VERSION: 1.54.1
+  SYFT_SHA256: c069905b391cc4c20a5ba65ad5c10be2a7ba074f8ea6ad203e24d14e303dad47 # syft_1.54.1_linux_amd64.tar.gz
 
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # publicar la release
+      id-token: write # firmar las attestations (Sigstore)
+      attestations: write # guardar las attestations en el repo
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,9 +26,65 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go test ./...
+      - name: Instalar syft (SBOM)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/syft.tar.gz" \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          echo "${SYFT_SHA256}  $RUNNER_TEMP/syft.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/syft"
+          tar -xzf "$RUNNER_TEMP/syft.tar.gz" -C "$RUNNER_TEMP/syft" syft
+          echo "$RUNNER_TEMP/syft" >>"$GITHUB_PATH"
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Attestation de procedencia
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-dist
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sbom.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # Una attestation de SBOM por archivo: actions/attest admite un único SBOM por llamada.
+  sbom:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+    strategy:
+      matrix:
+        target: [linux_amd64, linux_arm64, darwin_amd64, darwin_arm64]
+        ext: [tar.gz]
+        include:
+          - target: windows_amd64
+            ext: zip
+          - target: windows_arm64
+            ext: zip
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-dist
+          path: dist
+      - id: archive
+        env:
+          TARGET: ${{ matrix.target }}
+          EXT: ${{ matrix.ext }}
+        run: echo "path=dist/gadis_${GITHUB_REF_NAME#v}_${TARGET}.${EXT}" >>"$GITHUB_OUTPUT"
+      - name: Attestation del SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.archive.outputs.path }}
+          sbom-path: ${{ steps.archive.outputs.path }}.sbom.json
