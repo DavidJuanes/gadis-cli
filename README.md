@@ -166,7 +166,7 @@ Dependabot revisa cada semana los módulos de Go y las actions (`.github/dependa
 - **OpenSSF Scorecard** (`scorecard.yml`) mide las prácticas de la cadena de suministro en cada push a `main` y cada semana, y publica la puntuación del badge. Solo informa.
 - **govulncheck diario** (`vuln-scheduled.yml`) revisa `main` cada día, para enterarse de CVE nuevos aunque nadie haga push.
 
-Si una ejecución programada o lanzada a mano falla, `scripts/ci/failure-issue` abre un issue `needs-triage` con el enlace a la ejecución, o comenta el que ya esté abierto para ese workflow, y lo cierra cuando vuelve a pasar. Para probarlo, lanza `vuln-scheduled` a mano con `forzar_fallo`.
+Si una ejecución programada o lanzada a mano falla, el workflow reutilizable [`failure-issue.yml`](.github/workflows/failure-issue.yml), que todos llaman como su último job, ejecuta `scripts/ci/failure-issue`: abre un issue `needs-triage` con el enlace a la ejecución, o comenta el que ya esté abierto para ese workflow, y lo cierra cuando vuelve a pasar. Para probarlo, lanza `vuln-scheduled` a mano con `forzar_fallo`.
 
 ### Verificar una release
 
