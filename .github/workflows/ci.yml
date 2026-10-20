@@ -18,6 +18,10 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Para el comentario de cobertura en el PR.
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -25,7 +29,33 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - run: go test ./...
+      - name: Tests
+        run: >-
+          go run gotest.tools/gotestsum@v1.13.0
+          --format github-actions
+          --junitfile "$RUNNER_TEMP/junit.xml"
+          -- -coverprofile="$RUNNER_TEMP/coverage.out" ./...
+      # Tabla en el resumen, anotaciones en los tests que fallan y, en PRs, el
+      # comentario de cobertura. Corre aunque fallen los tests: el paso
+      # anterior ya hace fallar el job.
+      - name: Informe de tests y cobertura
+        if: ${{ !cancelled() }}
+        run: |
+          go run ./scripts/ci/test-report \
+            --junit "$RUNNER_TEMP/junit.xml" \
+            --coverprofile "$RUNNER_TEMP/coverage.out" \
+            ${PR:+--pr "$PR"}
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: test-report
+          path: |
+            ${{ runner.temp }}/junit.xml
+            ${{ runner.temp }}/coverage.out
+          if-no-files-found: warn
 
   lint:
     runs-on: ubuntu-latest

@@ -1,0 +1,23 @@
+## Tests
+
+| Pasan | Fallan | Se saltan | Total | Duración |
+| ---: | ---: | ---: | ---: | ---: |
+| 2 | 3 | 1 | 6 | 0.1 s |
+
+### Tests que fallan
+
+| Paquete | Test | Dónde |
+| --- | --- | --- |
+| `calc` | `TestDivFails` | `calc/calc_test.go:13` |
+| `greet` | `TestHello/nombre` | `greet/greet_test.go:13` |
+| `greet` | `TestHello` |  |
+
+## Cobertura
+
+Total: **75.0%** (6 de 8 sentencias)
+
+| Paquete | Cobertura | Sentencias |
+| --- | ---: | ---: |
+| `calc` | 75.0% | 3/4 |
+| `greet` | 100.0% | 3/3 |
+| `notests` | 0.0% | 0/1 |
