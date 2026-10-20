@@ -50,9 +50,6 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := writeBadge(*out, report.CoverageBadge, coverageBadge(cov.Percent())); err != nil {
-		return err
-	}
 	vulns, err := parseFile(*vulnPath, countCalledVulns)
 	if err != nil {
 		return err
