@@ -111,7 +111,7 @@ func gh(ctx context.Context, body string, args ...string) error {
 }
 
 func ghOutput(ctx context.Context, stdin string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "gh", args...)
+	cmd := exec.CommandContext(ctx, "gh", args...) //nolint:gosec // G204: fixed binary, no shell; args are built by this program
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

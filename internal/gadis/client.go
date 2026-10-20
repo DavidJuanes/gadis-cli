@@ -90,7 +90,7 @@ func (c *Client) do(ctx context.Context, r request) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func (c *Client) send(ctx context.Context, r request) (*http.Response, error) {
 	resp, err := c.HTTP.Do(req)
 	if saveErr := c.Jar.Save(); saveErr != nil && err == nil {
 		if resp != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		return nil, fmt.Errorf("saving session: %w", saveErr)
 	}

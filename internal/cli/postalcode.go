@@ -10,7 +10,7 @@ import (
 )
 
 func (a *app) postalCodeCmd() *cobra.Command {
-	var clear bool
+	var forget bool
 	cmd := &cobra.Command{
 		Use:   "postal-code [CP]",
 		Short: "Muestra o fija el código postal para buscar productos",
@@ -28,7 +28,7 @@ de ella. El carrito siempre usa la tienda del propio carrito.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			if clear || len(args) == 1 {
+			if forget || len(args) == 1 {
 				cfg, err := config.Load(a.env.ConfigDir)
 				if err != nil {
 					return err
@@ -62,6 +62,6 @@ de ella. El carrito siempre usa la tienda del propio carrito.`,
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&clear, "clear", false, "olvidar el CP guardado y usar el de la cuenta")
+	cmd.Flags().BoolVar(&forget, "clear", false, "olvidar el CP guardado y usar el de la cuenta")
 	return cmd
 }

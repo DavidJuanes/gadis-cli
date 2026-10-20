@@ -19,10 +19,11 @@ jobs:
       id-token: write # firmar las attestations (Sigstore)
       attestations: write # guardar las attestations en el repo
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - run: go test ./...
@@ -34,7 +35,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/syft"
           tar -xzf "$RUNNER_TEMP/syft.tar.gz" -C "$RUNNER_TEMP/syft" syft
           echo "$RUNNER_TEMP/syft" >>"$GITHUB_PATH"
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: "~> v2"
           args: release --clean

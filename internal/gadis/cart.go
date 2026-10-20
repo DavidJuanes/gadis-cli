@@ -77,7 +77,7 @@ func (c *Client) SetAmount(ctx context.Context, cart *Cart, productID string, am
 		return nil, err
 	}
 	if out.ID == "" {
-		return nil, fmt.Errorf("Gadisline no devolvió el carrito tras actualizarlo")
+		return nil, fmt.Errorf("Gadisline no devolvió el carrito tras actualizarlo") //nolint:staticcheck // ST1005: "Gadisline" is a proper noun
 	}
 	return &out, nil
 }
