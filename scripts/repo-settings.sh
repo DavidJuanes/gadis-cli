@@ -1,14 +1,15 @@
 #!/bin/sh
 # Aplica la configuración versionada del repo con `gh api`: ajustes de merge, funciones de
-# seguridad, el Environment integration (solo desde main) y el ruleset de main
-# (.github/rulesets/main.json), que se crea o se actualiza por nombre. Idempotente: se puede
-# ejecutar las veces que haga falta. Necesita gh, jq y permisos de admin sobre el repo. Se prueba con scripts/test-repo-settings.sh.
+# seguridad, el Environment integration (solo desde main), las immutable releases, las etiquetas
+# breaking y skip-changelog (si faltan) y los rulesets de .github/rulesets/ (main y los de los
+# tags v*), que se crean o se actualizan por nombre y target. Idempotente: se puede ejecutar las
+# veces que haga falta. Necesita gh, jq y permisos de admin sobre el repo. Se prueba con
+# scripts/test-repo-settings.sh.
 # Uso: sh scripts/repo-settings.sh [OWNER/REPO]
 set -eu
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 repo="${1:-DavidJuanes/gadis-cli}"
-ruleset="$root/.github/rulesets/main.json"
 
 # Merges: solo squash, borrar la rama al mergear y auto-merge. Secret scanning con push protection
 # y validity checks.
@@ -64,14 +65,39 @@ JSON
 fi
 echo "Environment integration restringido a main."
 
-# El ruleset va al final: exige checks que ya deben existir.
-name="$(jq -r .name "$ruleset")"
-id="$(gh api "repos/$repo/rulesets?includes_parents=false" --paginate \
-  --jq ".[] | select(.name == \"$name\") | .id")"
-if [ -n "$id" ]; then
-  gh api -X PUT "repos/$repo/rulesets/$id" --input "$ruleset" --silent
-  echo "Ruleset \"$name\" actualizado ($id)."
-else
-  gh api -X POST "repos/$repo/rulesets" --input "$ruleset" --silent
-  echo "Ruleset \"$name\" creado."
-fi
+# Immutable releases: una release publicada ya no cambia de tag ni de archivos. GoReleaser la
+# crea como borrador, sube todo y la publica al final, así que no choca con esto.
+gh api -X PUT "repos/$repo/immutable-releases" --silent
+echo "Immutable releases activadas."
+
+# Etiquetas de las notas de la release (.github/release.yml) que GitHub no trae de serie. Solo se
+# crean si faltan: si ya existen, no se tocan.
+labels="$(gh api "repos/$repo/labels" --paginate --jq '.[].name')"
+for label in "breaking b60205 Cambio incompatible: sube el minor en 0.x" \
+  "skip-changelog ededed Fuera de las notas de la release"; do
+  lname="${label%% *}"
+  rest="${label#* }"
+  if ! echo "$labels" | grep -qx "$lname"; then
+    jq -n --arg name "$lname" --arg color "${rest%% *}" --arg description "${rest#* }" \
+      '{name: $name, color: $color, description: $description}' |
+      gh api -X POST "repos/$repo/labels" --input - --silent
+    echo "Etiqueta $lname creada."
+  fi
+done
+
+# Los rulesets van al final: el de main exige checks que ya deben existir. Los tags v* llevan
+# dos, porque el bypass vale para todo un ruleset: tags-v-creacion (solo el admin crea tags) y
+# tags-v-inmutables (sin bypass: nadie los actualiza ni los borra).
+for ruleset in "$root"/.github/rulesets/*.json; do
+  name="$(jq -r .name "$ruleset")"
+  target="$(jq -r '.target // "branch"' "$ruleset")"
+  id="$(gh api "repos/$repo/rulesets?includes_parents=false&targets=$target" --paginate \
+    --jq ".[] | select(.name == \"$name\" and .target == \"$target\") | .id")"
+  if [ -n "$id" ]; then
+    gh api -X PUT "repos/$repo/rulesets/$id" --input "$ruleset" --silent
+    echo "Ruleset \"$name\" actualizado ($id)."
+  else
+    gh api -X POST "repos/$repo/rulesets" --input "$ruleset" --silent
+    echo "Ruleset \"$name\" creado."
+  fi
+done
