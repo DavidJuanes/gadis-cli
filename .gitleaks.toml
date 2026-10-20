@@ -1,0 +1,18 @@
+# gitleaks: lo ejecuta el job `secrets` de .github/workflows/ci.yml sobre
+# todo el historial; en local, `gitleaks git`.
+#
+# Se usan las reglas por defecto de gitleaks. Un falso positivo se declara
+# aquí con una allowlist de la regla concreta y limitada por ruta, nunca con
+# una allowlist global. Un secreto real no se tapa: se rota (y el historial no
+# se reescribe). Ejemplo:
+#
+#   [[rules]]
+#   id = "generic-api-key"
+#   [[rules.allowlists]]
+#   description = "Tokens de mentira del Gadisline falso"
+#   paths = ['''^internal/gadistest/''']
+
+title = "gadis-cli"
+
+[extend]
+useDefault = true

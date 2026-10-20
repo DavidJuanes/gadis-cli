@@ -86,7 +86,7 @@ go build ./cmd/gadis
 
 ### Tests de integración
 
-Ejecutan el CLI contra el backend real de Gadisline para detectar cambios en su API privada. Van detrás de la etiqueta `integration`, así que ni `go test ./...` ni el CI de cada PR los compilan. En local se lanzan a mano:
+Ejecutan el CLI contra el backend real de Gadisline para detectar cambios en su API privada. Van detrás de la etiqueta `integration`, así que `go test ./...` no los ejecuta (el lint del CI sí los revisa, y `integration.yml` los ejecuta, ver abajo). En local se lanzan a mano:
 
 ```bash
 go test -tags integration ./...
@@ -117,6 +117,35 @@ Las releases se publican con GoReleaser al subir una etiqueta `v*`.
 
 ## Calidad y seguridad
 
+### En cada PR
+
+Cada PR y cada push a `main` pasan por [`ci.yml`](.github/workflows/ci.yml), con estos jobs:
+
+| Job | Qué comprueba |
+| --- | --- |
+| `test` | `go test ./...` |
+| `lint` | [golangci-lint](https://golangci-lint.run) con [`.golangci.yml`](.golangci.yml), [actionlint](https://github.com/rhysd/actionlint) sobre `.github/workflows` y que `go mod tidy` no cambie nada |
+| `vuln` | [govulncheck](https://go.dev/doc/security/vuln/) sobre las dependencias que el código usa de verdad |
+| `secrets` | [gitleaks](https://github.com/gitleaks/gitleaks) sobre todo el historial, con [`.gitleaks.toml`](.gitleaks.toml) |
+| `build` | `goreleaser build --snapshot` para las 6 plataformas de la release |
+| `install-sh` | `scripts/test-install.sh`: que `install.sh` aborta si el checksum o la attestation no cuadran |
+
+Solo se usan herramientas nativas de GitHub y actions oficiales fijadas por SHA, sin servicios externos ([ADR-0001](docs/adr/0001-herramientas-nativas-de-github.md)).
+
+Para pasar el CI a la primera, ejecuta lo mismo en local:
+
+```bash
+go test ./...
+golangci-lint run                  # golangci-lint v2
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+go mod tidy && git diff --exit-code -- go.mod go.sum
+go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+gitleaks git                       # gitleaks v8
+goreleaser build --snapshot --clean
+```
+
+Un falso positivo de gitleaks se declara en `.gitleaks.toml` para esa regla y esa ruta, nunca con una excepción global. Si se filtra un secreto de verdad, se rota.
+
 ### Dependencias
 
 Dependabot revisa cada semana los módulos de Go y las actions (`.github/dependabot.yml`). Las actualizaciones minor y patch llegan agrupadas en un PR por ecosistema y se ponen en auto-merge (squash): se mergean solas cuando pasan los checks obligatorios. Las major llegan en PRs separados y se revisan a mano.
@@ -128,6 +157,17 @@ Dependabot revisa cada semana los módulos de Go y las actions (`.github/dependa
 - **govulncheck diario** (`vuln-scheduled.yml`) revisa `main` cada día, para enterarse de CVE nuevos aunque nadie haga push.
 
 Si una ejecución programada o lanzada a mano falla, `scripts/ci/failure-issue` abre un issue `needs-triage` con el enlace a la ejecución, o comenta el que ya esté abierto para ese workflow, y lo cierra cuando vuelve a pasar. Para probarlo, lanza `vuln-scheduled` a mano con `forzar_fallo`.
+
+### Verificar una release
+
+Cada release incluye `checksums.txt`, un SBOM en SPDX JSON por archivo (`<archivo>.sbom.json`, generado con syft) y attestations de procedencia y de SBOM firmadas en el CI de este repo. `install.sh` comprueba siempre el SHA-256 y, si tienes [`gh`](https://cli.github.com), también la attestation; si falla cualquiera de las dos, no instala nada. Para verificar a mano un archivo descargado:
+
+```bash
+sha256sum --ignore-missing -c checksums.txt          # en macOS: shasum -a 256 --ignore-missing -c checksums.txt
+gh attestation verify gadis_X.Y.Z_linux_amd64.tar.gz --repo DavidJuanes/gadis-cli
+gh attestation verify gadis_X.Y.Z_linux_amd64.tar.gz --repo DavidJuanes/gadis-cli \
+  --predicate-type https://spdx.dev/Document/v2.3    # attestation del SBOM
+```
 
 ## Licencia
 

@@ -35,6 +35,6 @@ func (st *Stores) register(mux *http.ServeMux, s *Server) {
 			return
 		}
 		defer s.lock()()
-		json.NewEncoder(w).Encode(map[string]any{"elements": append([]PostalCode{}, st.PostalCodes...)})
+		_ = json.NewEncoder(w).Encode(map[string]any{"elements": append([]PostalCode{}, st.PostalCodes...)})
 	})
 }

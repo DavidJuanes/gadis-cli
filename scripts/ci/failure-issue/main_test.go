@@ -35,8 +35,8 @@ func fakeGh() int {
 	if err != nil {
 		return 2
 	}
-	defer f.Close()
-	if _, err := f.Write(append(line, '\n')); err != nil {
+	_, err = f.Write(append(line, '\n'))
+	if closeErr := f.Close(); err != nil || closeErr != nil {
 		return 2
 	}
 	if os.Getenv("FAKE_GH_FAIL") != "" {
@@ -89,7 +89,7 @@ func fakeGhEnv(t *testing.T, issuesFixture string) func() []ghCall {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }() // read-only
 		var calls []ghCall
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {

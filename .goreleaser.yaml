@@ -23,3 +23,9 @@ checksum:
 
 changelog:
   use: github
+
+# Un SBOM (SPDX JSON, con syft) por archivo, adjunto a la release como <archivo>.sbom.json.
+sboms:
+  - artifacts: archive
+    documents: ["{{ .ArtifactName }}.sbom.json"]
+    args: ["$artifact", "--output", "spdx-json=$document"]

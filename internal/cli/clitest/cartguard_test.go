@@ -55,9 +55,9 @@ func TestGuardCartRestoresWhenTestStopsHalfWay(t *testing.T) {
 		if !SameLines(got, start) {
 			t.Fatalf("GuardCart returned %v, want the starting lines %v", got, start)
 		}
-		cart.Set("test-product", 3) // added by the test
-		cart.Set("milk", 2)         // changed
-		cart.Set("bread", 0)        // removed
+		_ = cart.Set("test-product", 3) // added by the test
+		_ = cart.Set("milk", 2)         // changed
+		_ = cart.Set("bread", 0)        // removed
 		t.SkipNow()
 		t.Error("not reached")
 	})
@@ -74,7 +74,7 @@ func TestGuardCartOnlyWritesChangedLines(t *testing.T) {
 
 	t.Run("test", func(t *testing.T) {
 		GuardCart(t, cart)
-		cart.Set("test-product", 1)
+		_ = cart.Set("test-product", 1)
 		cart.sets = nil
 	})
 
@@ -91,8 +91,8 @@ func TestGuardCartRestoresAnEmptyCart(t *testing.T) {
 		if got := GuardCart(t, cart); len(got) != 0 {
 			t.Errorf("GuardCart = %v, want no lines", got)
 		}
-		cart.Set("a", 1)
-		cart.Set("b", 0.5)
+		_ = cart.Set("a", 1)
+		_ = cart.Set("b", 0.5)
 	})
 
 	if len(cart.lines) != 0 {
