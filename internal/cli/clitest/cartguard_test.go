@@ -126,6 +126,39 @@ func TestRestoreCartChecksTheResult(t *testing.T) {
 	}
 }
 
+// privateCart is a memCart whose lines are personal data.
+type privateCart struct{ memCart }
+
+func (*privateCart) Private() bool { return true }
+
+// When a private cart (the maintainer's real one) can't be restored, the
+// error says how many lines it had but never which products.
+func TestRestoreCartHidesWhatAPrivateCartHad(t *testing.T) {
+	cart := &privateCart{memCart{lines: []CartLine{{"test-product", 2}}, failSet: errors.New("boom")}}
+
+	err := restoreCart(cart, []CartLine{{"milk", 6}, {"bread", 1}})
+	if err == nil {
+		t.Fatal("restoreCart succeeded with a cart that rejects every change")
+	}
+	for _, personal := range []string{"milk", "bread", "test-product", "6"} {
+		if strings.Contains(err.Error(), personal) {
+			t.Errorf("error %q shows %q", err, personal)
+		}
+	}
+	if !strings.Contains(err.Error(), "2 lines") {
+		t.Errorf("error %q does not say how many lines the cart had", err)
+	}
+}
+
+// The CLI cart of a private CLI is private.
+func TestCLICartOfAPrivateCLIIsPrivate(t *testing.T) {
+	gadis := New(t, gadistest.New(t))
+	gadis.Private = true
+	if p, ok := CLICart(t, gadis).(interface{ Private() bool }); !ok || !p.Private() {
+		t.Error("CLICart of a private CLI is not private")
+	}
+}
+
 type ignoringCart struct{ memCart }
 
 func (c *ignoringCart) Set(string, float64) error { return nil }

@@ -4,9 +4,19 @@
 // gadisline.com. They need a session prepared beforehand with
 // `GADIS_HOME=<dir> gadis login` and run with:
 //
-//	GADIS_TEST_HOME=<dir> go test -tags integration ./internal/cli/
+//	GADIS_INTEGRATION_ACCOUNT=1 GADIS_TEST_HOME=<dir> go test -tags integration ./internal/cli/
 //
-// Without it they are skipped. The cart is the maintainer's real cart: every
+// Without GADIS_INTEGRATION_ACCOUNT=1 they are skipped; with it, a missing or
+// expired session fails them.
+//
+// Personal data: CI runs them in a public repo, whose logs anyone can read.
+// The account's email, name, address and postal code and the cart's contents
+// never appear in a failure message: the CLI is private (clitest.CLI.Private,
+// command output is never printed) and the messages here only say which
+// assertion failed, with counts and booleans instead of the values. Products
+// picked by the tests from a search are catalog data and may be named.
+//
+// The cart is the maintainer's real cart: every
 // test that touches it saves its lines first and restores exactly those lines
 // and amounts when it ends, whether it passes or fails (clitest.GuardCart).
 // Test products come from a search and are never already in the cart.
@@ -14,6 +24,7 @@ package cli_test
 
 import (
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -35,7 +46,7 @@ func TestRealWhoamiAndAccountPostalCode(t *testing.T) {
 	}
 	gadis.Run(t, "whoami", "--json").Success(t).JSON(t, &who)
 	if !who.Authenticated || who.Email == "" || who.CartID == "" || who.Delivery.PostalCode == "" || who.Delivery.StoreID == "" {
-		t.Fatalf("whoami = %+v, want an account with email, cart and default delivery", who)
+		t.Fatalf("whoami: authenticated %v, email %v, cart %v, postal code %v, store %v; want them all", who.Authenticated, who.Email != "", who.CartID != "", who.Delivery.PostalCode != "", who.Delivery.StoreID != "")
 	}
 
 	// Store precedence: the account's postal code, then a saved one, then the flag.
@@ -43,19 +54,44 @@ func TestRealWhoamiAndAccountPostalCode(t *testing.T) {
 	gadis.Run(t, "search", "leche", "--limit", "3", "--json").Success(t).JSON(t, &out)
 	checkProducts(t, out.Products)
 	if out.Store.Source != "account" || out.Store.PostalCode != who.Delivery.PostalCode || out.Store.ID != who.Delivery.StoreID {
-		t.Errorf("search store = %+v, want the account's default delivery %+v", out.Store, who.Delivery)
+		t.Errorf("search store: source %q, account postal code %v, account store %v; want the account's default delivery", out.Store.Source, out.Store.PostalCode == who.Delivery.PostalCode, out.Store.ID == who.Delivery.StoreID)
 	}
 
 	gadis.Run(t, "postal-code", deliveryCP).Success(t)
 	gadis.Run(t, "search", "leche", "--limit", "3", "--json").Success(t).JSON(t, &out)
 	if out.Store.Source != "config" || out.Store.PostalCode != deliveryCP {
-		t.Errorf("search store after `postal-code %s` = %+v, want it from the config", deliveryCP, out.Store)
+		t.Errorf("search store after `postal-code %s`: source %q, that postal code %v; want it from the config", deliveryCP, out.Store.Source, out.Store.PostalCode == deliveryCP)
 	}
 
 	gadis.Run(t, "search", "leche", "--limit", "3", "--postal-code", who.Delivery.PostalCode, "--json").Success(t).JSON(t, &out)
 	if out.Store.Source != "flag" || out.Store.PostalCode != who.Delivery.PostalCode {
-		t.Errorf("search store with --postal-code %s = %+v, want it from the flag", who.Delivery.PostalCode, out.Store)
+		t.Errorf("search store with --postal-code <account postal code>: source %q, same postal code %v; want it from the flag", out.Store.Source, out.Store.PostalCode == who.Delivery.PostalCode)
 	}
+}
+
+// forceFailureEnv names the environment variable that, when "1", makes
+// TestRealForcedFailure fail on purpose, to check in CI that a failing
+// account test leaks nothing personal into the logs.
+const forceFailureEnv = "GADIS_INTEGRATION_FORCE_FAILURE"
+
+// Fails on purpose through the paths that would print personal data: a
+// command output that doesn't decode and a failing command, both on the
+// account.
+func TestRealForcedFailure(t *testing.T) {
+	if os.Getenv(forceFailureEnv) != "1" {
+		t.Skipf("only fails on purpose with %s=1", forceFailureEnv)
+	}
+	gadis := clitest.ProductionWithSession(t)
+	clitest.GuardCart(t, clitest.CLICart(t, gadis))
+	t.Run("whoami", func(t *testing.T) {
+		gadis.Run(t, "whoami", "--json").JSON(t, &[]int{})
+	})
+	t.Run("cart", func(t *testing.T) {
+		gadis.Run(t, "cart", "--json").JSON(t, &[]int{})
+	})
+	t.Run("failing command", func(t *testing.T) {
+		gadis.Run(t, "cart", "set", "00000000-0000-4000-8000-000000000000", "1").Success(t)
+	})
 }
 
 // realCart is the part of `gadis cart --json` these tests check.
@@ -85,7 +121,7 @@ func (c realCart) amount(productID string) float64 {
 func checkTotals(t *testing.T, c realCart) {
 	t.Helper()
 	if math.Abs(c.Total-(c.ProductsPrice+c.ShippingCost)) > 0.01 {
-		t.Errorf("total %v != products %v + shipping %v", c.Total, c.ProductsPrice, c.ShippingCost)
+		t.Error("cart total != products + shipping (amounts hidden: personal data)")
 	}
 }
 
@@ -144,7 +180,7 @@ func (ct cartTest) checkUnchanged(t *testing.T, after string) {
 		t.Fatal(err)
 	}
 	if !clitest.SameLines(got, ct.start) {
-		t.Errorf("after %s the cart changed: %v, want %v", after, got, ct.start)
+		t.Errorf("after %s the cart changed: %d lines, want the %d it had (lines hidden: personal data)", after, len(got), len(ct.start))
 	}
 }
 
@@ -185,7 +221,7 @@ func TestRealCartRejectsWithoutWriting(t *testing.T) {
 	} {
 		res := ct.gadis.Run(t, c.args...)
 		if res.Code == 0 || !strings.Contains(res.Stderr, c.err) {
-			t.Errorf("%v: code %d, stderr %q; want an error with %q", c.args, res.Code, res.Stderr, c.err)
+			t.Errorf("%v: code %d, stderr has %q: %v; want an error with it", c.args, res.Code, c.err, strings.Contains(res.Stderr, c.err))
 		}
 		ct.checkUnchanged(t, strings.Join(c.args, " "))
 	}
@@ -239,12 +275,12 @@ func TestRealCartClear(t *testing.T) {
 	var cart realCart
 	ct.gadis.Run(t, "cart", "--json").Success(t).JSON(t, &cart)
 	if cart.amount(p.ID) != 1 {
-		t.Errorf("cart clear without --yes changed the cart: %+v", cart.Products)
+		t.Errorf("cart clear without --yes changed the cart: %d lines, test product × %v", len(cart.Products), cart.amount(p.ID))
 	}
 
 	ct.gadis.Run(t, "cart", "clear", "--yes", "--json").Success(t).JSON(t, &cart)
 	if len(cart.Products) != 0 {
-		t.Errorf("cart clear --yes left %+v", cart.Products)
+		t.Errorf("cart clear --yes left %d lines", len(cart.Products))
 	}
 	checkTotals(t, cart)
 }
