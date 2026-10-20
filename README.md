@@ -116,6 +116,7 @@ Cada PR y cada push a `main` pasan por [`ci.yml`](.github/workflows/ci.yml), con
 | `secrets` | [gitleaks](https://github.com/gitleaks/gitleaks) sobre todo el historial, con [`.gitleaks.toml`](.gitleaks.toml) |
 | `build` | `goreleaser build --snapshot` para las 6 plataformas de la release |
 | `install-sh` | `scripts/test-install.sh`: que `install.sh` aborta si el checksum o la attestation no cuadran |
+| `repo-settings` | `scripts/test-repo-settings.sh`: que `scripts/repo-settings.sh` crea o actualiza el ruleset sin duplicarlo y que los checks que exige son jobs que existen |
 
 Solo se usan herramientas nativas de GitHub y actions oficiales fijadas por SHA, sin servicios externos ([ADR-0001](docs/adr/0001-herramientas-nativas-de-github.md)).
 
@@ -155,6 +156,20 @@ gh attestation verify gadis_X.Y.Z_linux_amd64.tar.gz --repo DavidJuanes/gadis-cl
 gh attestation verify gadis_X.Y.Z_linux_amd64.tar.gz --repo DavidJuanes/gadis-cli \
   --predicate-type https://spdx.dev/Document/v2.3    # attestation del SBOM
 ```
+
+### Gobierno del repo
+
+`main` solo cambia por PR (squash, sin aprobaciones obligatorias) con los checks `test`, `lint`, `vuln`, `secrets`, `build` y `analyze` (CodeQL) en verde y sin alertas de CodeQL de severidad *high* o superior. Tiene historial lineal y no admite force-push ni borrado. Los administradores pueden saltarse el ruleset.
+
+El ruleset vive en [`.github/rulesets/main.json`](.github/rulesets/main.json). [`scripts/repo-settings.sh`](scripts/repo-settings.sh) lo crea o lo actualiza con `gh api` y aplica el resto de ajustes: solo squash merge, borrar la rama al mergear, auto-merge, reporte privado de vulnerabilidades, secret scanning con push protection y validity checks, y alertas y actualizaciones de seguridad de Dependabot. Se puede ejecutar las veces que haga falta:
+
+```bash
+sh scripts/repo-settings.sh DavidJuanes/gadis-cli   # necesita gh con permisos de admin sobre el repo
+```
+
+Si se renombra un job obligatorio hay que cambiar también el ruleset; el job `repo-settings` falla si no coinciden.
+
+Para reportar una vulnerabilidad, mira [`SECURITY.md`](SECURITY.md).
 
 ## Licencia
 
