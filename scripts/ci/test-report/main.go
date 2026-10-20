@@ -169,7 +169,7 @@ func (r testReport) comment(mainCov float64, haveMain bool) string {
 // diff is the change in percentage points between the figures as they are
 // shown, so that it always matches the two numbers in the comment.
 func diff(cur, main float64) string {
-	d := math.Round(cur*10)/10 - math.Round(main*10)/10
+	d := report.RoundPercent(cur) - report.RoundPercent(main)
 	switch {
 	case math.Abs(d) < 0.05:
 		return "sin cambios"

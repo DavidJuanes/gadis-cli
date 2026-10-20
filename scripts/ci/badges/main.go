@@ -14,7 +14,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -139,7 +138,7 @@ func coverageBadge(p float64) report.Badge {
 //	>= 50%  orange
 //	<  50%  red
 func coverageColor(p float64) string {
-	p = math.Round(p*10) / 10
+	p = report.RoundPercent(p)
 	switch {
 	case p >= 90:
 		return "brightgreen"

@@ -46,6 +46,15 @@ func TestFormatPercentUsesOneDecimal(t *testing.T) {
 	}
 }
 
+// RoundPercent is the percentage as FormatPercent shows it.
+func TestRoundPercentKeepsOneDecimal(t *testing.T) {
+	for in, want := range map[float64]float64{200.0 / 3: 66.7, 79.96: 80, 0.04: 0, 71.25: 71.3} {
+		if got := RoundPercent(in); got != want {
+			t.Errorf("RoundPercent(%v) = %v, want %v", in, got, want)
+		}
+	}
+}
+
 func TestBadgeURLPointsAtTheBadgesBranch(t *testing.T) {
 	got := BadgeURL("DavidJuanes/gadis-cli", CoverageBadge)
 	want := "https://raw.githubusercontent.com/DavidJuanes/gadis-cli/badges/coverage.json"
