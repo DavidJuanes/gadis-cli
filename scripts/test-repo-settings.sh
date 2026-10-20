@@ -4,10 +4,7 @@
 # Uso: sh scripts/test-repo-settings.sh
 set -eu
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
-work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
-fails=0
+. "$(dirname "$0")/testlib.sh"
 repo=DavidJuanes/gadis-cli
 
 # gh falso: solo entiende `gh api [-X MÉTODO] RUTA [--input F] [--jq EXPR] [--paginate]`.
@@ -107,20 +104,11 @@ chmod +x "$ghbin/gh"
 run() {
   dir="$work/$1"
   mkdir -p "$dir/state"
-  set +e
-  PATH="$ghbin:$PATH" FAKE_GH_STATE="$dir/state" FAKE_GH_REPO="$repo" \
-    sh "$root/scripts/repo-settings.sh" "$repo" >"$dir/out" 2>&1
-  echo $? >"$dir/status"
-  set -e
+  capture "$dir" env PATH="$ghbin:$PATH" FAKE_GH_STATE="$dir/state" FAKE_GH_REPO="$repo" \
+    sh "$root/scripts/repo-settings.sh" "$repo"
 }
 
-fail() {
-  echo "FAIL $name: $*"
-  sed 's/^/    /' "$work/$name/out"
-  fails=$((fails + 1))
-}
 state() { echo "$work/$name/state"; }
-status() { cat "$work/$name/status"; }
 called() { grep -qx "$1" "$(state)/calls" 2>/dev/null; }
 count() { grep -cx "$1" "$(state)/calls" 2>/dev/null || true; }
 
@@ -258,8 +246,4 @@ for ctx in $contexts; do
   fi
 done
 
-if [ "$fails" -gt 0 ]; then
-  echo "$fails fallo(s)"
-  exit 1
-fi
-echo "repo-settings.sh: todas las pruebas pasan"
+finish repo-settings.sh
