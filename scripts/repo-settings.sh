@@ -1,8 +1,8 @@
 #!/bin/sh
 # Aplica la configuración versionada del repo con `gh api`: ajustes de merge, funciones de
-# seguridad y el ruleset de main (.github/rulesets/main.json), que se crea o se actualiza por
-# nombre. Idempotente: se puede ejecutar las veces que haga falta. Necesita gh, jq y permisos de
-# admin sobre el repo. Se prueba con scripts/test-repo-settings.sh.
+# seguridad, el Environment integration (solo desde main) y el ruleset de main
+# (.github/rulesets/main.json), que se crea o se actualiza por nombre. Idempotente: se puede
+# ejecutar las veces que haga falta. Necesita gh, jq y permisos de admin sobre el repo. Se prueba con scripts/test-repo-settings.sh.
 # Uso: sh scripts/repo-settings.sh [OWNER/REPO]
 set -eu
 
@@ -41,6 +41,28 @@ echo "Reporte privado de vulnerabilidades activado."
 gh api -X PUT "repos/$repo/vulnerability-alerts" --silent
 gh api -X PUT "repos/$repo/automated-security-fixes" --silent
 echo "Alertas y actualizaciones de seguridad de Dependabot activadas."
+
+# Environment integration, con las credenciales de los tests de cuenta (los secretos los añade el
+# mantenedor a mano): solo se despliega desde main. Se crea o se actualiza, y de sus reglas de
+# ramas solo queda main.
+env="repos/$repo/environments/integration"
+gh api -X PUT "$env" --silent --input - <<'JSON'
+{ "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
+JSON
+policies="$(gh api "$env/deployment-branch-policies" --paginate \
+  --jq '.branch_policies[] | "\(.id) \(.type // "branch") \(.name)"')"
+echo "$policies" | while read -r pid ptype pname; do
+  [ -n "$pid" ] || continue
+  if [ "$ptype $pname" != "branch main" ]; then
+    gh api -X DELETE "$env/deployment-branch-policies/$pid" --silent
+  fi
+done
+if ! echo "$policies" | grep -q ' branch main$'; then
+  gh api -X POST "$env/deployment-branch-policies" --silent --input - <<'JSON'
+{ "name": "main", "type": "branch" }
+JSON
+fi
+echo "Environment integration restringido a main."
 
 # El ruleset va al final: exige checks que ya deben existir.
 name="$(jq -r .name "$ruleset")"

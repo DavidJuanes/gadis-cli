@@ -137,7 +137,7 @@ Cada PR y cada push a `main` pasan por [`ci.yml`](.github/workflows/ci.yml), con
 | `secrets` | [gitleaks](https://github.com/gitleaks/gitleaks) sobre todo el historial, con [`.gitleaks.toml`](.gitleaks.toml) |
 | `build` | `goreleaser build --snapshot` para las 6 plataformas de la release |
 | `install-sh` | `scripts/test-install.sh`: que `install.sh` aborta si el checksum o la attestation no cuadran |
-| `repo-settings` | `scripts/test-repo-settings.sh`: que `scripts/repo-settings.sh` crea o actualiza el ruleset sin duplicarlo y que los checks que exige son jobs que existen |
+| `repo-settings` | `scripts/test-repo-settings.sh`: que `scripts/repo-settings.sh` crea o actualiza el ruleset sin duplicarlo, que el Environment `integration` solo admite `main` y que los checks que exige son jobs que existen |
 | `badges` | Solo en push a `main`: [`scripts/ci/badges`](scripts/ci/badges) genera `coverage.json`, `tests.json` y `vulns.json` (formato *endpoint* de shields.io) a partir de los resultados de `test` y `vuln` y los publica en la rama huérfana `badges` en un único commit que reemplaza al anterior ([ADR-0002](docs/adr/0002-kpis-en-la-rama-badges.md)). De ahí salen los badges de KPIs y la cobertura de `main` del comentario de los PR |
 
 Solo se usan herramientas nativas de GitHub y actions oficiales fijadas por SHA, sin servicios externos ([ADR-0001](docs/adr/0001-herramientas-nativas-de-github.md)).
@@ -183,11 +183,13 @@ gh attestation verify gadis_X.Y.Z_linux_amd64.tar.gz --repo DavidJuanes/gadis-cl
 
 `main` solo cambia por PR (squash, sin aprobaciones obligatorias) con los checks `test`, `lint`, `vuln`, `secrets`, `build` y `analyze` (CodeQL) en verde y sin alertas de CodeQL de severidad *high* o superior. Tiene historial lineal y no admite force-push ni borrado. Los administradores pueden saltarse el ruleset.
 
-El ruleset vive en [`.github/rulesets/main.json`](.github/rulesets/main.json). [`scripts/repo-settings.sh`](scripts/repo-settings.sh) lo crea o lo actualiza con `gh api` y aplica el resto de ajustes: solo squash merge, borrar la rama al mergear, auto-merge, reporte privado de vulnerabilidades, secret scanning con push protection y validity checks, y alertas y actualizaciones de seguridad de Dependabot. Se puede ejecutar las veces que haga falta:
+El ruleset vive en [`.github/rulesets/main.json`](.github/rulesets/main.json). [`scripts/repo-settings.sh`](scripts/repo-settings.sh) lo crea o lo actualiza con `gh api` y aplica el resto de ajustes: solo squash merge, borrar la rama al mergear, auto-merge, reporte privado de vulnerabilidades, secret scanning con push protection y validity checks, alertas y actualizaciones de seguridad de Dependabot, y el Environment `integration` restringido a la rama `main`. Se puede ejecutar las veces que haga falta:
 
 ```bash
 sh scripts/repo-settings.sh DavidJuanes/gadis-cli   # necesita gh con permisos de admin sobre el repo
 ```
+
+El script no toca los secretos. Los de los tests de cuenta y carrito los añade el mantenedor a mano en el Environment `integration` (*Settings > Environments > integration*, o con `gh secret set --env integration`): `GADIS_EMAIL` y `GADIS_PASSWORD`, los de su cuenta de Gadisline.
 
 Si se renombra un job obligatorio hay que cambiar también el ruleset; el job `repo-settings` falla si no coinciden.
 

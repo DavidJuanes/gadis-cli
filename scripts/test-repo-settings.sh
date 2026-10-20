@@ -11,7 +11,8 @@ fails=0
 repo=DavidJuanes/gadis-cli
 
 # gh falso: solo entiende `gh api [-X MÉTODO] RUTA [--input F] [--jq EXPR] [--paginate]`.
-# Estado en $FAKE_GH_STATE: rulesets.json (lista) y ruleset-ID.json (cada ruleset).
+# Estado en $FAKE_GH_STATE: rulesets.json (lista) y ruleset-ID.json (cada ruleset),
+# env-integration.json (el Environment) y policies.json (sus reglas de ramas de despliegue).
 # Cada llamada se registra en $FAKE_GH_STATE/calls como "MÉTODO RUTA".
 ghbin="$work/ghbin"
 mkdir -p "$ghbin"
@@ -54,6 +55,8 @@ out() {
   else cat; fi
 }
 [ -f "$s/rulesets.json" ] || echo '[]' >"$s/rulesets.json"
+[ -f "$s/policies.json" ] || echo '[]' >"$s/policies.json"
+policies="repos/$FAKE_GH_REPO/environments/integration/deployment-branch-policies"
 case "$method ${path%%\?*}" in
   "GET repos/$FAKE_GH_REPO/rulesets") out <"$s/rulesets.json" ;;
   "POST repos/$FAKE_GH_REPO/rulesets")
@@ -79,6 +82,22 @@ case "$method ${path%%\?*}" in
     "PUT repos/$FAKE_GH_REPO/vulnerability-alerts" | \
     "PUT repos/$FAKE_GH_REPO/automated-security-fixes")
     touch "$s/enabled-${path##*/}" ;;
+  "PUT repos/$FAKE_GH_REPO/environments/integration")
+    jq '{name: "integration"} + .' "$body" >"$s/env-integration.json"
+    cp "$body" "$s/body-put-env"
+    out <"$s/env-integration.json" ;;
+  "GET $policies")
+    jq '{total_count: length, branch_policies: .}' "$s/policies.json" | out ;;
+  "POST $policies")
+    [ -f "$s/env-integration.json" ] || { echo "gh falso: el Environment no existe" >&2; exit 1; }
+    id=$(( $(jq 'map(.id) | max // 0' "$s/policies.json") + 1 ))
+    jq --argjson id "$id" --slurpfile b "$body" '. + [{id: $id} + $b[0]]' \
+      "$s/policies.json" >"$s/tmp" && mv "$s/tmp" "$s/policies.json"
+    jq --argjson id "$id" '.[] | select(.id == $id)' "$s/policies.json" | out ;;
+  "DELETE $policies/"*)
+    id="${path##*/}"
+    jq --argjson id "$id" 'map(select(.id != $id))' "$s/policies.json" >"$s/tmp" &&
+      mv "$s/tmp" "$s/policies.json" ;;
   *) echo "gh falso: llamada inesperada $method $path" >&2; exit 1 ;;
 esac
 GH
@@ -148,7 +167,8 @@ name=idempotent
 run "$name"
 [ "$(status)" = 0 ] || fail "la primera ejecución sale con $(status)"
 mkdir -p "$work/snap"
-cp "$(state)"/rulesets.json "$(state)"/ruleset-*.json "$(state)"/repo.json "$work/snap/"
+cp "$(state)"/rulesets.json "$(state)"/ruleset-*.json "$(state)"/repo.json \
+  "$(state)"/env-integration.json "$(state)"/policies.json "$work/snap/"
 run "$name"
 [ "$(status)" = 0 ] || fail "la segunda ejecución sale con $(status)"
 [ "$(count "POST repos/$repo/rulesets")" = 1 ] || fail "crea el ruleset más de una vez"
@@ -158,6 +178,43 @@ id="$(jq -r '.[0].id' "$(state)/rulesets.json")"
 for f in "$work"/snap/*; do
   cmp -s "$f" "$(state)/${f##*/}" || fail "el estado cambia en la segunda ejecución: ${f##*/}"
 done
+
+# El Environment integration (credenciales de los tests de cuenta) solo se despliega desde main.
+name=creates_integration_environment
+run "$name"
+[ "$(status)" = 0 ] || fail "sale con $(status), se esperaba 0"
+got="$(jq -cS .deployment_branch_policy "$(state)/body-put-env" 2>/dev/null || true)"
+[ "$got" = '{"custom_branch_policies":true,"protected_branches":false}' ] ||
+  fail "el Environment integration no se restringe a ramas concretas: $got"
+got="$(jq -c 'map({name, type})' "$(state)/policies.json")"
+[ "$got" = '[{"name":"main","type":"branch"}]' ] ||
+  fail "el Environment integration no permite solo main: $got"
+
+# Ya tiene main y otra regla: se queda solo main, sin duplicarla.
+name=integration_environment_allows_only_main
+mkdir -p "$(state)"
+echo '{"name": "integration"}' >"$(state)/env-integration.json"
+echo '[{"id": 4, "name": "release/*", "type": "branch"}, {"id": 5, "name": "main", "type": "branch"}]' \
+  >"$(state)/policies.json"
+run "$name"
+[ "$(status)" = 0 ] || fail "sale con $(status), se esperaba 0"
+got="$(jq -c . "$(state)/policies.json")"
+[ "$got" = '[{"id":5,"name":"main","type":"branch"}]' ] ||
+  fail "no deja solo la regla main que ya había: $got"
+! called "POST repos/$repo/environments/integration/deployment-branch-policies" ||
+  fail "crea otra regla main aunque ya existe"
+
+# Un error al borrar una regla de ramas también para el script.
+name=stops_on_policy_error
+mkdir -p "$(state)"
+echo '{"name": "integration"}' >"$(state)/env-integration.json"
+echo '[{"id": 4, "name": "release/*", "type": "branch"}]' >"$(state)/policies.json"
+FAKE_GH_FAIL="DELETE repos/$repo/environments/integration/deployment-branch-policies/4"
+export FAKE_GH_FAIL
+run "$name"
+unset FAKE_GH_FAIL
+[ "$(status)" != 0 ] || fail "sale con 0 aunque falla el borrado de una regla de ramas"
+! called "POST repos/$repo/rulesets" || fail "sigue tras un error de la API"
 
 name=stops_on_api_error
 FAKE_GH_FAIL="PUT repos/$repo/private-vulnerability-reporting"
