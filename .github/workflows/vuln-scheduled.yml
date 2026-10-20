@@ -1,0 +1,55 @@
+name: vuln-scheduled
+
+# govulncheck diario sobre main, para enterarse de CVE nuevos aunque nadie haga
+# push. Si falla, el job report abre un issue needs-triage (o comenta el que ya
+# está abierto) y lo cierra cuando vuelve a pasar. Para probar el aviso, lánzalo
+# a mano con forzar_fallo.
+
+on:
+  schedule:
+    - cron: "11 5 * * *"
+  workflow_dispatch:
+    inputs:
+      forzar_fallo:
+        description: Hace fallar la ejecución para probar el issue de aviso
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - if: inputs.forzar_fallo
+        run: |
+          echo "::error::Fallo forzado con forzar_fallo"
+          exit 1
+
+  report:
+    needs: vuln
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go run ./scripts/ci/failure-issue --status "$RESULT"
+        env:
+          RESULT: ${{ needs.vuln.result }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}

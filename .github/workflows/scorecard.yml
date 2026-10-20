@@ -1,0 +1,60 @@
+name: scorecard
+
+# OpenSSF Scorecard en push a main y cada semana. Publica los resultados (lo que
+# necesita el badge del README) y sube el SARIF a code scanning. Solo informa:
+# no es un check obligatorio. Si falla una ejecución programada (o lanzada a
+# mano), el job report abre o comenta un issue needs-triage.
+#
+# Scorecard verifica este workflow al publicar: el job analysis solo puede usar
+# actions de su lista permitida, sin pasos run, y sin más permisos de escritura
+# que security-events e id-token. Por eso el aviso va en un job aparte.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: results.sarif
+
+  report:
+    needs: analysis
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go run ./scripts/ci/failure-issue --status "$RESULT"
+        env:
+          RESULT: ${{ needs.analysis.result }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
