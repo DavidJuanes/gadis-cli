@@ -16,6 +16,10 @@ import (
 
 const module = "example.com/demo"
 
+// shared holds the fixtures of a test run (junit.xml, cover.out) shared with
+// internal/report.
+var shared = filepath.Join("..", "internal", "report", "testdata")
+
 func golden(t *testing.T, name string) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join("testdata", name))
@@ -39,8 +43,8 @@ func ciEnv(t *testing.T) (func(string) string, string) {
 
 func baseArgs() []string {
 	return []string{
-		"--junit", filepath.Join("testdata", "junit.xml"),
-		"--coverprofile", filepath.Join("testdata", "cover.out"),
+		"--junit", filepath.Join(shared, "junit.xml"),
+		"--coverprofile", filepath.Join(shared, "cover.out"),
 		"--module", module,
 	}
 }
@@ -206,7 +210,7 @@ func TestFailureWithoutLocationIsAnnotatedWithoutFile(t *testing.T) {
 	getenv, _ := ciEnv(t)
 	var stdout bytes.Buffer
 
-	args := []string{"--junit", junit, "--coverprofile", filepath.Join("testdata", "cover.out"), "--module", module}
+	args := []string{"--junit", junit, "--coverprofile", filepath.Join(shared, "cover.out"), "--module", module}
 	if err := run(args, getenv, &stdout); err != nil {
 		t.Fatal(err)
 	}
