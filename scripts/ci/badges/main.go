@@ -42,15 +42,15 @@ func run(args []string) error {
 		return errors.New("--junit, --coverprofile, --govulncheck and --out are required")
 	}
 
-	cov, err := parseFile(*coverPath, report.ParseCoverProfile)
+	cov, err := report.ParseFile(*coverPath, report.ParseCoverProfile)
 	if err != nil {
 		return err
 	}
-	results, err := parseFile(*junitPath, report.ParseJUnit)
+	results, err := report.ParseFile(*junitPath, report.ParseJUnit)
 	if err != nil {
 		return err
 	}
-	vulns, err := parseFile(*vulnPath, countCalledVulns)
+	vulns, err := report.ParseFile(*vulnPath, countCalledVulns)
 	if err != nil {
 		return err
 	}
@@ -169,14 +169,4 @@ func writeBadge(dir, name string, b report.Badge) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, name), append(data, '\n'), 0o600)
-}
-
-func parseFile[T any](name string, parse func(io.Reader) (T, error)) (T, error) {
-	f, err := os.Open(name) //nolint:gosec // G304: the path comes from the workflow, which owns the runner
-	if err != nil {
-		var zero T
-		return zero, err
-	}
-	defer func() { _ = f.Close() }() // read-only
-	return parse(f)
 }

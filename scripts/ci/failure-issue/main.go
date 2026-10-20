@@ -10,16 +10,16 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
+
+	ghcli "github.com/DavidJuanes/gadis-cli/scripts/ci/internal/gh"
 )
 
 func main() {
@@ -85,7 +85,7 @@ func failureBody(workflow, runURL, marker string) string {
 // marker, or 0 if there is none. It filters locally instead of using GitHub
 // search, whose index lags behind and could duplicate the issue.
 func findOpenIssue(ctx context.Context, marker string) (int, error) {
-	out, err := ghOutput(ctx, "", "issue", "list", "--state", "open", "--limit", "1000", "--json", "number,body")
+	out, err := ghcli.Run(ctx, "", "issue", "list", "--state", "open", "--limit", "1000", "--json", "number,body")
 	if err != nil {
 		return 0, err
 	}
@@ -106,18 +106,6 @@ func findOpenIssue(ctx context.Context, marker string) (int, error) {
 
 // gh runs the gh CLI with body on stdin.
 func gh(ctx context.Context, body string, args ...string) error {
-	_, err := ghOutput(ctx, body, args...)
+	_, err := ghcli.Run(ctx, body, args...)
 	return err
-}
-
-func ghOutput(ctx context.Context, stdin string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "gh", args...) //nolint:gosec // G204: fixed binary, no shell; args are built by this program
-	cmd.Stdin = strings.NewReader(stdin)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("gh %s: %w: %s", strings.Join(args[:2], " "), err, strings.TrimSpace(stderr.String()))
-	}
-	return stdout.Bytes(), nil
 }

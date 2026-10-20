@@ -22,12 +22,12 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/DavidJuanes/gadis-cli/scripts/ci/internal/gh"
 	"github.com/DavidJuanes/gadis-cli/scripts/ci/internal/report"
 )
 
@@ -59,11 +59,11 @@ func run(args []string, getenv func(string) string, stdout io.Writer) error {
 		*module = m
 	}
 
-	results, err := parseFile(*junitPath, report.ParseJUnit)
+	results, err := report.ParseFile(*junitPath, report.ParseJUnit)
 	if err != nil {
 		return err
 	}
-	cov, err := parseFile(*coverPath, report.ParseCoverProfile)
+	cov, err := report.ParseFile(*coverPath, report.ParseCoverProfile)
 	if err != nil {
 		return err
 	}
@@ -189,7 +189,7 @@ func plural(n int, one, many string) string {
 
 // upsertComment edits the bot's coverage comment on the PR, or creates it.
 func upsertComment(ctx context.Context, repo string, pr int, body string) error {
-	out, err := gh(ctx, "", "api", "--paginate",
+	out, err := gh.Run(ctx, "", "api", "--paginate",
 		fmt.Sprintf("repos/%s/issues/%d/comments", repo, pr),
 		"--jq", ".[] | {id: .id, user: .user.login, body: .body}")
 	if err != nil {
@@ -208,37 +208,14 @@ func upsertComment(ctx context.Context, repo string, pr int, body string) error 
 			return fmt.Errorf("gh api: comments: %w", err)
 		}
 		if c.User == bot && strings.Contains(c.Body, marker) {
-			_, err := gh(ctx, body, "api", "--method", "PATCH",
+			_, err := gh.Run(ctx, body, "api", "--method", "PATCH",
 				fmt.Sprintf("repos/%s/issues/comments/%d", repo, c.ID), "-F", "body=@-")
 			return err
 		}
 	}
-	_, err = gh(ctx, body, "api", "--method", "POST",
+	_, err = gh.Run(ctx, body, "api", "--method", "POST",
 		fmt.Sprintf("repos/%s/issues/%d/comments", repo, pr), "-F", "body=@-")
 	return err
-}
-
-// gh runs the GitHub CLI with stdin and returns its stdout.
-func gh(ctx context.Context, stdin string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "gh", args...) //nolint:gosec // G204: fixed binary, no shell; args are built by this program
-	cmd.Stdin = strings.NewReader(stdin)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("gh %s: %w: %s", strings.Join(args[:2], " "), err, strings.TrimSpace(stderr.String()))
-	}
-	return out, nil
-}
-
-func parseFile[T any](name string, parse func(io.Reader) (T, error)) (T, error) {
-	f, err := os.Open(name) //nolint:gosec // G304: the path comes from the workflow, which owns the runner
-	if err != nil {
-		var zero T
-		return zero, err
-	}
-	defer func() { _ = f.Close() }() // read-only
-	return parse(f)
 }
 
 func appendFile(name, text string) error {
