@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="5" failures="0" errors="0" time="0.031207">
+	<testsuite tests="3" failures="0" time="0.004000" name="example.com/demo/calc" timestamp="2026-10-20T10:00:00Z">
+		<properties>
+			<property name="go.version" value="go1.27.2 linux/amd64"></property>
+		</properties>
+		<testcase classname="example.com/demo/calc" name="TestAdd" time="0.000000"></testcase>
+		<testcase classname="example.com/demo/calc" name="TestSub" time="0.000000"></testcase>
+		<testcase classname="example.com/demo/calc" name="TestDiv" time="0.000000">
+			<skipped message="=== RUN   TestDiv&#xA;    calc_test.go:20: pendiente&#xA;--- SKIP: TestDiv (0.00s)&#xA;"></skipped>
+		</testcase>
+	</testsuite>
+	<testsuite tests="2" failures="0" time="0.003000" name="example.com/demo/greet" timestamp="2026-10-20T10:00:00Z">
+		<properties>
+			<property name="go.version" value="go1.27.2 linux/amd64"></property>
+		</properties>
+		<testcase classname="example.com/demo/greet" name="TestHello" time="0.000000"></testcase>
+		<testcase classname="example.com/demo/greet" name="TestHello/vacío" time="0.000000"></testcase>
+	</testsuite>
+</testsuites>
