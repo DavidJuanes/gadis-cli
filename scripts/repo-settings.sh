@@ -1,7 +1,7 @@
 #!/bin/sh
 # Aplica la configuración versionada del repo con `gh api`: ajustes de merge, funciones de
 # seguridad, el Environment integration (solo desde main), las immutable releases, las etiquetas
-# breaking y skip-changelog (si faltan) y los rulesets de .github/rulesets/ (main y los de los
+# breaking, skip-changelog y spec (si faltan) y los rulesets de .github/rulesets/ (main y los de los
 # tags v*), que se crean o se actualizan por nombre y target. Idempotente: se puede ejecutar las
 # veces que haga falta. Necesita gh, jq y permisos de admin sobre el repo. Se prueba con
 # scripts/test-repo-settings.sh.
@@ -65,29 +65,32 @@ JSON
 fi
 echo "Environment integration restringido a main."
 
-# Immutable releases: una release publicada ya no cambia de tag ni de archivos. GoReleaser la
-# crea como borrador, sube todo y la publica al final, así que no choca con esto.
+# Immutable releases: una release publicada ya no cambia de tag ni de archivos. Por qué no
+# choca con GoReleaser: ADR-0003.
 gh api -X PUT "repos/$repo/immutable-releases" --silent
 echo "Immutable releases activadas."
 
-# Etiquetas de las notas de la release (.github/release.yml) que GitHub no trae de serie. Solo se
-# crean si faltan: si ya existen, no se tocan.
-labels="$(gh api "repos/$repo/labels" --paginate --jq '.[].name')"
-for label in "breaking b60205 Cambio incompatible: sube el minor en 0.x" \
-  "skip-changelog ededed Fuera de las notas de la release"; do
-  lname="${label%% *}"
-  rest="${label#* }"
-  if ! echo "$labels" | grep -qx "$lname"; then
-    jq -n --arg name "$lname" --arg color "${rest%% *}" --arg description "${rest#* }" \
+# Etiquetas que GitHub no trae de serie: breaking y skip-changelog, de las notas de la release
+# (.github/release.yml), y spec, la de los issues que son un spec (docs/agents/issue-tracker.md).
+# Solo se crean si faltan: si ya existen, no se tocan. Tabla con NOMBRE, COLOR y DESCRIPCIÓN
+# separados por tabuladores.
+existing="$(gh api "repos/$repo/labels" --paginate --jq '.[].name')"
+tab="$(printf '\t')"
+while IFS="$tab" read -r label color description; do
+  if ! echo "$existing" | grep -qx "$label"; then
+    jq -n --arg name "$label" --arg color "$color" --arg description "$description" \
       '{name: $name, color: $color, description: $description}' |
       gh api -X POST "repos/$repo/labels" --input - --silent
-    echo "Etiqueta $lname creada."
+    echo "Etiqueta $label creada."
   fi
-done
+done <<'LABELS'
+breaking	b60205	Cambio incompatible: sube el minor en 0.x
+skip-changelog	ededed	Fuera de las notas de la release
+spec	5319e7	Issue que es un spec (padre de sus tickets)
+LABELS
 
-# Los rulesets van al final: el de main exige checks que ya deben existir. Los tags v* llevan
-# dos, porque el bypass vale para todo un ruleset: tags-v-creacion (solo el admin crea tags) y
-# tags-v-inmutables (sin bypass: nadie los actualiza ni los borra).
+# Los rulesets van al final: el de main exige checks que ya deben existir. Por qué los tags v*
+# llevan dos: ADR-0003.
 for ruleset in "$root"/.github/rulesets/*.json; do
   name="$(jq -r .name "$ruleset")"
   target="$(jq -r '.target // "branch"' "$ruleset")"

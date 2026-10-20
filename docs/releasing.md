@@ -6,7 +6,7 @@ En los ejemplos, `SHA` es el commit candidato de `main` y `vX.Y.Z` la versión q
 
 ## 0. Ajustes del repo
 
-[`scripts/repo-settings.sh`](../scripts/repo-settings.sh) tiene que estar aplicado: crea los rulesets de tags `tags-v-creacion` (solo el admin crea tags `v*`) y `tags-v-inmutables` (nadie los mueve ni los borra), activa las *immutable releases* y crea las etiquetas `breaking` y `skip-changelog`. Compruébalo:
+[`scripts/repo-settings.sh`](../scripts/repo-settings.sh) tiene que estar aplicado: crea los rulesets de tags `tags-v-creacion` (solo el admin crea tags `v*`) y `tags-v-inmutables` (nadie los mueve ni los borra), activa las *immutable releases* y crea las etiquetas `breaking`, `skip-changelog` y `spec` (por qué dos rulesets y cómo encaja GoReleaser con las *immutable releases*: [ADR-0003](adr/0003-tag-manual-inmutable.md)). Compruébalo:
 
 ```bash
 gh api repos/DavidJuanes/gadis-cli/immutable-releases --jq .enabled              # true

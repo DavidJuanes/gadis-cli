@@ -137,8 +137,8 @@ called "POST repos/$repo/rulesets" || fail "no crea el ruleset"
 cmp -s "$(state)/body-post-ruleset-main" "$root/.github/rulesets/main.json" ||
   fail "no envía .github/rulesets/main.json al crear el ruleset"
 
-# Los tags v* tienen dos rulesets, porque el bypass vale para todo un ruleset: en uno solo el
-# admin crea tags; en el otro, sin bypass, nadie los actualiza ni los borra.
+# Los tags v* tienen dos rulesets (ADR-0003): en uno solo el admin crea tags; en el otro, sin
+# bypass, nadie los actualiza ni los borra.
 name=creates_tag_rulesets
 run "$name"
 [ "$(status)" = 0 ] || fail "sale con $(status), se esperaba 0"
@@ -204,24 +204,25 @@ cp "$(state)"/rulesets.json "$(state)"/ruleset-*.json "$(state)"/repo.json \
   "$(state)"/env-integration.json "$(state)"/policies.json "$(state)"/labels.json "$work/snap/"
 run "$name"
 [ "$(status)" = 0 ] || fail "la segunda ejecución sale con $(status)"
-n="$(ls "$root"/.github/rulesets/*.json | wc -l)"
-[ "$(count "POST repos/$repo/rulesets")" = "$n" ] || fail "crea algún ruleset más de una vez"
+rulesets="$(ls "$root"/.github/rulesets/*.json | wc -l)"
+[ "$(count "POST repos/$repo/rulesets")" = "$rulesets" ] || fail "crea algún ruleset más de una vez"
 for id in $(jq -r '.[].id' "$(state)/rulesets.json"); do
   [ "$(count "PUT repos/$repo/rulesets/$id")" = 1 ] || fail "la segunda ejecución no actualiza el ruleset $id"
 done
-[ "$(jq length "$(state)/rulesets.json")" = "$n" ] || fail "hay rulesets duplicados"
-[ "$(count "POST repos/$repo/labels")" = 2 ] || fail "la segunda ejecución vuelve a crear etiquetas"
+[ "$(jq length "$(state)/rulesets.json")" = "$rulesets" ] || fail "hay rulesets duplicados"
+[ "$(count "POST repos/$repo/labels")" = 3 ] || fail "la segunda ejecución vuelve a crear etiquetas"
 for f in "$work"/snap/*; do
   cmp -s "$f" "$(state)/${f##*/}" || fail "el estado cambia en la segunda ejecución: ${f##*/}"
 done
 
 # Las notas de la release agrupan los PR por etiqueta: breaking y skip-changelog no vienen de
-# serie en GitHub, así que se crean.
+# serie en GitHub, así que se crean. También spec, la de los issues que son un spec.
 name=creates_labels
 run "$name"
 [ "$(status)" = 0 ] || fail "sale con $(status), se esperaba 0"
-got="$(jq -c '[.[].name] | sort' "$(state)/labels.json")"
-[ "$got" = '["breaking","skip-changelog"]' ] || fail "no crea breaking y skip-changelog: $got"
+got="$(jq -c 'map({name, color, description}) | sort_by(.name)' "$(state)/labels.json")"
+expected='[{"name":"breaking","color":"b60205","description":"Cambio incompatible: sube el minor en 0.x"},{"name":"skip-changelog","color":"ededed","description":"Fuera de las notas de la release"},{"name":"spec","color":"5319e7","description":"Issue que es un spec (padre de sus tickets)"}]'
+[ "$got" = "$expected" ] || fail "no crea breaking, skip-changelog y spec: $got"
 
 # Si ya existen (aunque sea con otro color o descripción), no se tocan.
 name=keeps_existing_labels
@@ -231,9 +232,9 @@ run "$name"
 [ "$(status)" = 0 ] || fail "sale con $(status), se esperaba 0"
 got="$(jq -c '[.[] | select(.name == "breaking")]' "$(state)/labels.json")"
 [ "$got" = '[{"name":"breaking","color":"000000"}]' ] || fail "toca la etiqueta breaking existente: $got"
-[ "$(count "POST repos/$repo/labels")" = 1 ] || fail "no crea solo skip-changelog"
-jq -e 'any(.[]; .name == "skip-changelog")' "$(state)/labels.json" >/dev/null ||
-  fail "no crea skip-changelog"
+[ "$(count "POST repos/$repo/labels")" = 2 ] || fail "no crea solo skip-changelog y spec"
+got="$(jq -c '[.[].name] | sort' "$(state)/labels.json")"
+[ "$got" = '["breaking","bug","skip-changelog","spec"]' ] || fail "no crea skip-changelog y spec: $got"
 
 # El Environment integration (credenciales de los tests de cuenta) solo se despliega desde main.
 name=creates_integration_environment

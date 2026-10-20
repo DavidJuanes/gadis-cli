@@ -26,8 +26,7 @@ checksum:
 changelog:
   use: github-native
 
-# Con las immutable releases activadas, una release publicada ya no admite archivos nuevos.
-# GoReleaser la crea como borrador, sube todo y la publica al final (no hay que tocar `draft`).
+# Con las immutable releases activadas no hay que tocar `draft`: ver docs/adr/0003-tag-manual-inmutable.md.
 # El preflight comprueba antes de compilar que el token puede publicar y que el tag no tiene ya
 # una release inmutable; con fail_on_error para en vez de solo avisar.
 release:

@@ -15,7 +15,7 @@ Para lanzar una release había dos caminos: automatizarla (release-please, seman
 - **Tag manual**: el mantenedor (o Claude, con su confirmación explícita) sube un tag anotado `vX.Y.Z`, sin firmar, sobre un commit de `main`. Sin servicios ni actions de terceros (ADR-0001). La versión se calcula de forma mecánica a partir de las etiquetas de los PR, pero la decisión de publicar es humana. La procedencia la dan las attestations y el ruleset, no la firma del tag.
 - **Guarda en `release.yml`**: su primer paso aborta si el tag no es `vX.Y.Z` estricto o si su commit no es alcanzable desde `main`.
 - **Tags inmutables**: dos rulesets sobre `refs/tags/v*`, porque el *bypass* vale para todo un ruleset. `tags-v-creacion` impide crear tags con *bypass* para el admin; `tags-v-inmutables` impide actualizarlos y borrarlos, sin *bypass*, tampoco para el admin.
-- **Releases inmutables**: las *immutable releases* están activadas. GoReleaser crea la release como borrador, sube todo y la publica al final.
+- **Releases inmutables**: las *immutable releases* están activadas, así que una release publicada ya no admite archivos nuevos. GoReleaser crea la release como borrador, sube todos los archivos y la publica al final, así que no choca con ellas y no hay que tocar su opción `draft`.
 - **Número quemado**: si una release falla, no se reintenta con el mismo número. Se corrige en un PR y se publica el siguiente *patch*. Una release incompleta se borra; el tag se queda.
 - **Confirmación con Claude**: un hook `PreToolUse` versionado (`scripts/confirm-tag-push.sh`) pide confirmación ante cualquier orden que publique un tag. Devuelve «ask», no «deny».
 
