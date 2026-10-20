@@ -9,8 +9,12 @@ import (
 	"strings"
 )
 
-// CoverageBadge is the file name of the coverage KPI on the badges branch.
-const CoverageBadge = "coverage.json"
+// File names of the KPIs on the badges branch. The README points at them.
+const (
+	CoverageBadge = "coverage.json"
+	TestsBadge    = "tests.json"
+	VulnsBadge    = "vulns.json"
+)
 
 // Badge is a KPI in the shields.io endpoint format, one JSON file per KPI on
 // the orphan branch badges (ADR-0002).

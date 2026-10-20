@@ -56,8 +56,8 @@ func run(args []string) error {
 	}
 	for name, b := range map[string]report.Badge{
 		report.CoverageBadge: coverageBadge(cov.Percent()),
-		testsFile:            testsBadge(results),
-		vulnsFile:            vulnsBadge(vulns),
+		report.TestsBadge:    testsBadge(results),
+		report.VulnsBadge:    vulnsBadge(vulns),
 	} {
 		if err := writeBadge(*out, name, b); err != nil {
 			return err
@@ -113,13 +113,6 @@ func countCalledVulns(r io.Reader) (int, error) {
 	}
 	return len(called), nil
 }
-
-// File names of the other KPIs on the badges branch, next to
-// report.CoverageBadge. The README points at them.
-const (
-	testsFile = "tests.json"
-	vulnsFile = "vulns.json"
-)
 
 // testsBadge counts the passing tests (subtests included, as gotestsum lists
 // them) and, in red, the failing ones.
