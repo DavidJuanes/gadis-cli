@@ -104,32 +104,14 @@ jobs:
           "$RUNNER_TEMP/gadis" logout >/dev/null 2>&1 || true
           rm -rf "$GADIS_HOME"
 
+  # Solo corre uno de los dos jobs, el otro sale skipped: failure-issue toma el
+  # resultado del que ha corrido.
   report:
     needs: [catalog, account]
     if: always()
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      # Solo corre uno de los dos jobs: el otro sale skipped.
-      - run: |
-          status=skipped
-          for result in "$CATALOG" "$ACCOUNT"; do
-            case "$result" in
-              failure) status=failure ;;
-              success | cancelled) [ "$status" = skipped ] && status="$result" ;;
-            esac
-          done
-          go run ./scripts/ci/failure-issue --status "$status"
-        env:
-          CATALOG: ${{ needs.catalog.result }}
-          ACCOUNT: ${{ needs.account.result }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+    uses: ./.github/workflows/failure-issue.yml
+    with:
+      results: ${{ needs.catalog.result }} ${{ needs.account.result }}
