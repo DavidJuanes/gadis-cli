@@ -121,7 +121,7 @@ gh workflow run integration.yml --ref main -f forzar_fallo=true # prueba el avis
 
 Con `cuenta`, el job hace `gadis login` sobre un `GADIS_HOME` temporal con los secretos `GADIS_EMAIL` y `GADIS_PASSWORD` del Environment `integration` (restringido a la rama `main`) y corre los tests sin `-v` con `GADIS_INTEGRATION_ACCOUNT=1`. Como los logs de un repo público son públicos, el email y los datos de la cuenta se enmascaran, la salida de `gadis login` no se muestra y no se sube ningún artefacto. Dos ejecuciones nunca coinciden (`concurrency`), y un fallo abre un issue como los workflows programados.
 
-Las releases se publican con GoReleaser al subir una etiqueta `v*`. Las notas las genera GitHub a partir de los PR, agrupados por etiqueta según [`.github/release.yml`](.github/release.yml): `breaking` (⚠️ Cambios incompatibles), `enhancement` (Novedades), `bug` (Correcciones), `dependencies` (Dependencias) y el resto en Otros. Un PR con `skip-changelog` queda fuera. No hay `CHANGELOG.md`: el changelog son las páginas de [Releases](https://github.com/DavidJuanes/gadis-cli/releases).
+Las releases se publican con GoReleaser al subir un tag anotado `vX.Y.Z` sobre `main`, siguiendo [docs/releasing.md](docs/releasing.md). Las notas las genera GitHub a partir de los PR, agrupados por etiqueta según [`.github/release.yml`](.github/release.yml): `breaking` (⚠️ Cambios incompatibles), `enhancement` (Novedades), `bug` (Correcciones), `dependencies` (Dependencias) y el resto en Otros. Un PR con `skip-changelog` queda fuera. No hay `CHANGELOG.md`: el changelog son las páginas de [Releases](https://github.com/DavidJuanes/gadis-cli/releases).
 
 ## Calidad y seguridad
 
