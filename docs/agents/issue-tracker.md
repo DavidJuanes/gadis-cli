@@ -28,7 +28,7 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue.
+Create a GitHub issue. If it is a spec (e.g. from `/to-spec`), also label it `spec`: `gh issue create --label spec --label ready-for-agent ...`.
 
 ## When a skill says "fetch the relevant ticket"
 

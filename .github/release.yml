@@ -1,0 +1,16 @@
+# Categorías de las notas de la release que genera GitHub (GoReleaser usa github-native). Cada PR
+# va a la primera categoría cuyas etiquetas lleve; los que no encajan, a Otros.
+changelog:
+  exclude:
+    labels: [skip-changelog]
+  categories:
+    - title: ⚠️ Cambios incompatibles
+      labels: [breaking]
+    - title: Novedades
+      labels: [enhancement]
+    - title: Correcciones
+      labels: [bug]
+    - title: Dependencias
+      labels: [dependencies]
+    - title: Otros
+      labels: ["*"]

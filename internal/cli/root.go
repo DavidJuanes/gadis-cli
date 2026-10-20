@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 
@@ -20,8 +21,23 @@ import (
 	"github.com/DavidJuanes/gadis-cli/internal/gadis"
 )
 
-// Version is set at build time with -ldflags "-X …/internal/cli.Version=v1.2.3".
+// Version is set at build time with -ldflags "-X …/internal/cli.Version=1.2.3"
+// (GoReleaser). Without it, it is "dev" and --version falls back to the module
+// version that Go records in builds like `go install …@vX.Y.Z`.
 var Version = "dev"
+
+// version is what --version shows: Version, or else the module version from
+// the build info read by read (nil = none), without the leading v.
+func version(read func() (*debug.BuildInfo, bool)) string {
+	if Version != "dev" || read == nil {
+		return Version
+	}
+	info, ok := read()
+	if !ok || info == nil || info.Main.Version == "" || info.Main.Version == "(devel)" {
+		return Version
+	}
+	return strings.TrimPrefix(info.Main.Version, "v")
+}
 
 type app struct {
 	env    Env
@@ -47,6 +63,9 @@ type Env struct {
 	ResolveConfigDir func() (string, error)
 	IsTerminal       func() bool // whether stdin is an interactive terminal
 	Getenv           func(string) string
+	// ReadBuildInfo gives the module version for --version when the binary
+	// has none from -ldflags. nil = no build info.
+	ReadBuildInfo func() (*debug.BuildInfo, bool)
 }
 
 // Execute runs the CLI with the process's arguments, standard streams,
@@ -61,6 +80,7 @@ func Execute() int {
 		ResolveConfigDir: config.Dir,
 		IsTerminal:       func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
 		Getenv:           os.Getenv,
+		ReadBuildInfo:    debug.ReadBuildInfo,
 	})
 }
 
@@ -102,7 +122,7 @@ func (a *app) rootCmd() *cobra.Command {
 La búsqueda y las categorías funcionan sin cuenta. El carrito necesita
 iniciar sesión con ` + "`gadis login`" + `. La sesión (cookies, nunca la contraseña)
 se guarda en ~/.gadis/session.json y dura unos 30 días.`,
-		Version:       Version,
+		Version:       version(a.env.ReadBuildInfo),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(*cobra.Command, []string) error {

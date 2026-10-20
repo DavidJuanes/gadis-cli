@@ -180,6 +180,10 @@ jobs:
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: "~> v2"
+          args: check
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          version: "~> v2"
           args: build --snapshot --clean
 
   install-sh:
@@ -197,3 +201,19 @@ jobs:
         with:
           persist-credentials: false
       - run: sh scripts/test-repo-settings.sh
+
+  release-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sh scripts/test-release-guard.sh
+
+  confirm-tag-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sh scripts/test-confirm-tag-push.sh

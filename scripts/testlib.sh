@@ -38,3 +38,14 @@ finish() {
   fi
   echo "$1: todas las pruebas pasan"
 }
+
+# isolated ORDEN...: ejecuta ORDEN sin la configuración de git del usuario ni la del sistema y con
+# una identidad fija, para que el resultado no dependa de la máquina.
+isolated() {
+  env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com \
+    GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com "$@"
+}
+
+# isolated_git ARG...: git aislado como en isolated.
+isolated_git() { isolated git "$@"; }
