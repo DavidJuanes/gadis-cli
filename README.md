@@ -131,7 +131,7 @@ Cada PR y cada push a `main` pasan por [`ci.yml`](.github/workflows/ci.yml), con
 
 | Job | Qué comprueba |
 | --- | --- |
-| `test` | `go test ./...` con [gotestsum](https://github.com/gotestyourself/gotestsum) y cobertura. [`scripts/ci/test-report`](scripts/ci/test-report) deja en el resumen de la ejecución la tabla de tests y la cobertura total y por paquete, anota cada test que falla en su línea del diff y, en los PR, mantiene un único comentario con la cobertura y la diferencia respecto a `main`. El JUnit y el perfil de cobertura se descargan como artefacto `test-report`. No hay umbral de cobertura |
+| `test` | `go test ./...` con [gotestsum](https://github.com/gotestyourself/gotestsum) y cobertura. [`scripts/ci/test-report`](scripts/ci/test-report) deja en el resumen de la ejecución la tabla de tests y la cobertura total y por paquete, anota cada test que falla en su línea del diff y, en los PR, mantiene un único comentario con la cobertura y la diferencia respecto a `main`. La cobertura deja fuera los paquetes de apoyo a los tests, que por convención de Go acaban en `test` (`internal/gadistest`, `internal/cli/clitest`, `scripts/ci/internal/ghtest`). El JUnit y el perfil de cobertura se descargan como artefacto `test-report`. No hay umbral de cobertura |
 | `lint` | [golangci-lint](https://golangci-lint.run) con [`.golangci.yml`](.golangci.yml), [actionlint](https://github.com/rhysd/actionlint) sobre `.github/workflows` y que `go mod tidy` no cambie nada |
 | `vuln` | [govulncheck](https://go.dev/doc/security/vuln/) sobre las dependencias que el código usa de verdad |
 | `secrets` | [gitleaks](https://github.com/gitleaks/gitleaks) sobre todo el historial, con [`.gitleaks.toml`](.gitleaks.toml) |

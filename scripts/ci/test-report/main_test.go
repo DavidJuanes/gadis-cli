@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DavidJuanes/gadis-cli/scripts/ci/internal/fakegh"
+	"github.com/DavidJuanes/gadis-cli/scripts/ci/internal/ghtest"
 )
 
 const module = "example.com/demo"
@@ -72,7 +72,7 @@ func TestPushWritesSummaryAndAnnotatesFailures(t *testing.T) {
 // The fake gh answers the comment listing, the only call without --method,
 // with the fixture of PR comments.
 func TestMain(m *testing.M) {
-	fakegh.Main(m, func(args []string) bool { return !slices.Contains(args, "--method") })
+	ghtest.Main(m, func(args []string) bool { return !slices.Contains(args, "--method") })
 }
 
 // mainBadge serves the coverage badge of main, or 404 if body is empty, and
@@ -97,7 +97,7 @@ func prArgs(badgeURL string) []string {
 const main713 = `{"schemaVersion":1,"label":"cobertura","message":"71.3%","color":"yellow"}`
 
 func TestPRWithoutCommentCreatesOneWithDiffAgainstMain(t *testing.T) {
-	fake := fakegh.Install(t, "no-comments.jsonl")
+	fake := ghtest.Install(t, "no-comments.jsonl")
 	getenv, _ := ciEnv(t)
 
 	if err := run(prArgs(mainBadge(t, main713)), getenv, io.Discard); err != nil {
@@ -120,7 +120,7 @@ func TestPRWithoutCommentCreatesOneWithDiffAgainstMain(t *testing.T) {
 // existing-comment.jsonl has the bot's comment (99) and a user's comment that
 // quotes the marker (11), which must be left alone.
 func TestPRWithCommentEditsTheBotsOne(t *testing.T) {
-	fake := fakegh.Install(t, "existing-comment.jsonl")
+	fake := ghtest.Install(t, "existing-comment.jsonl")
 	getenv, _ := ciEnv(t)
 
 	if err := run(prArgs(mainBadge(t, main713)), getenv, io.Discard); err != nil {
@@ -141,7 +141,7 @@ func TestPRWithCommentEditsTheBotsOne(t *testing.T) {
 }
 
 func TestPRWithoutMainBadgeCommentsWithoutDiff(t *testing.T) {
-	fake := fakegh.Install(t, "no-comments.jsonl")
+	fake := ghtest.Install(t, "no-comments.jsonl")
 	getenv, _ := ciEnv(t)
 	var stdout bytes.Buffer
 
@@ -162,7 +162,7 @@ func TestPRWithoutMainBadgeCommentsWithoutDiff(t *testing.T) {
 }
 
 func TestPRWithUnreadableMainBadgeWarnsAndCommentsWithoutDiff(t *testing.T) {
-	fake := fakegh.Install(t, "no-comments.jsonl")
+	fake := ghtest.Install(t, "no-comments.jsonl")
 	getenv, _ := ciEnv(t)
 	var stdout bytes.Buffer
 
@@ -179,7 +179,7 @@ func TestPRWithUnreadableMainBadgeWarnsAndCommentsWithoutDiff(t *testing.T) {
 }
 
 func TestCommentThatCannotBePublishedWarnsWithoutFailing(t *testing.T) {
-	fakegh.Install(t, "no-comments.jsonl").Fail()
+	ghtest.Install(t, "no-comments.jsonl").Fail()
 	getenv, summary := ciEnv(t)
 	var stdout bytes.Buffer
 

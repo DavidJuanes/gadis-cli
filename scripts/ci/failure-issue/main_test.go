@@ -4,12 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DavidJuanes/gadis-cli/scripts/ci/internal/fakegh"
+	"github.com/DavidJuanes/gadis-cli/scripts/ci/internal/ghtest"
 )
 
 // The fake gh answers `gh issue list` with the fixture of open issues.
 func TestMain(m *testing.M) {
-	fakegh.Main(m, func(args []string) bool {
+	ghtest.Main(m, func(args []string) bool {
 		return len(args) >= 2 && args[0] == "issue" && args[1] == "list"
 	})
 }
@@ -36,7 +36,7 @@ func runEnv(workflow string) func(string) string {
 const runURL = "https://github.com/DavidJuanes/gadis-cli/actions/runs/123456"
 
 func TestFailureWithoutOpenIssueOpensNeedsTriageIssue(t *testing.T) {
-	fake := fakegh.Install(t, "no-issues.json")
+	fake := ghtest.Install(t, "no-issues.json")
 
 	if err := run([]string{"--status", "failure"}, runEnv("vuln-scheduled")); err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestFailureWithoutOpenIssueOpensNeedsTriageIssue(t *testing.T) {
 }
 
 func TestFailureWithOpenIssueCommentsOnIt(t *testing.T) {
-	fake := fakegh.Install(t, "open-issues.json")
+	fake := ghtest.Install(t, "open-issues.json")
 
 	if err := run([]string{"--status", "failure"}, runEnv("vuln-scheduled")); err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestFailureWithOpenIssueCommentsOnIt(t *testing.T) {
 }
 
 func TestSuccessClosesOpenIssueWithComment(t *testing.T) {
-	fake := fakegh.Install(t, "open-issues.json")
+	fake := ghtest.Install(t, "open-issues.json")
 
 	if err := run([]string{"--status", "success"}, runEnv("vuln-scheduled")); err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestNothingToDo(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fake := fakegh.Install(t, tc.fixture)
+			fake := ghtest.Install(t, tc.fixture)
 			if err := run([]string{"--status", tc.status}, runEnv("vuln-scheduled")); err != nil {
 				t.Fatal(err)
 			}
@@ -139,7 +139,7 @@ func TestSeveralResultsAreTheResultOfTheJobThatRan(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fake := fakegh.Install(t, tc.fixture)
+			fake := ghtest.Install(t, tc.fixture)
 			if err := run([]string{"--status", tc.status}, runEnv("vuln-scheduled")); err != nil {
 				t.Fatal(err)
 			}
@@ -158,21 +158,21 @@ func TestSeveralResultsAreTheResultOfTheJobThatRan(t *testing.T) {
 }
 
 func TestUnknownResultAmongSeveralIsAnError(t *testing.T) {
-	fakegh.Install(t, "no-issues.json")
+	ghtest.Install(t, "no-issues.json")
 	if err := run([]string{"--status", "skipped flaky"}, runEnv("vuln-scheduled")); err == nil {
 		t.Fatal("want error for unknown status")
 	}
 }
 
 func TestUnknownStatusIsAnError(t *testing.T) {
-	fakegh.Install(t, "no-issues.json")
+	ghtest.Install(t, "no-issues.json")
 	if err := run([]string{"--status", "flaky"}, runEnv("vuln-scheduled")); err == nil {
 		t.Fatal("want error for unknown status")
 	}
 }
 
 func TestGhFailureIsReported(t *testing.T) {
-	fakegh.Install(t, "no-issues.json").Fail()
+	ghtest.Install(t, "no-issues.json").Fail()
 	if err := run([]string{"--status", "failure"}, runEnv("vuln-scheduled")); err == nil {
 		t.Fatal("want error when gh fails")
 	}

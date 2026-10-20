@@ -40,12 +40,12 @@ linters:
   exclusions:
     rules:
       # Los tests y sus arneses (el Gadisline falso de internal/gadistest, el
-      # de internal/cli/clitest y el gh falso de scripts/ci/internal/fakegh)
+      # de internal/cli/clitest y el gh falso de scripts/ci/internal/ghtest)
       # leen y copian ficheros temporales y fabrican cookies como las de
       # Gadisline: gosec ahí no aporta.
       - path: _test\.go
         linters: [gosec]
-      - path: internal/(gadistest|cli/clitest|fakegh)/
+      - path: internal/(gadistest|cli/clitest|ghtest)/
         linters: [gosec]
 
 formatters:

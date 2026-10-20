@@ -3,6 +3,7 @@ package report
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -29,6 +30,33 @@ func TestCoverProfileTotalsAndPackages(t *testing.T) {
 		{Package: "example.com/demo/calc", Statements: 4, Covered: 3},
 		{Package: "example.com/demo/greet", Statements: 3, Covered: 3},
 		{Package: "example.com/demo/notests", Statements: 1, Covered: 0},
+	}
+	if len(cov.Packages) != len(want) {
+		t.Fatalf("packages = %+v, want %+v", cov.Packages, want)
+	}
+	for i := range want {
+		if cov.Packages[i] != want[i] {
+			t.Errorf("package %d = %+v, want %+v", i, cov.Packages[i], want[i])
+		}
+	}
+}
+
+// Test-helper packages (named <x>test, like net/http/httptest) are support
+// code for the tests, not product code, and stay out of the coverage.
+func TestCoverProfileLeavesOutTestHelpers(t *testing.T) {
+	profile := `mode: set
+example.com/demo/calc/calc.go:1.1,2.2 2 1
+example.com/demo/calc/calctest/fake.go:1.1,2.2 5 0
+example.com/demo/internal/ghtest/gh.go:1.1,2.2 3 1
+example.com/demo/test-report/main.go:1.1,2.2 1 0
+`
+	cov, err := ParseCoverProfile(strings.NewReader(profile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []PackageCoverage{
+		{Package: "example.com/demo/calc", Statements: 2, Covered: 2},
+		{Package: "example.com/demo/test-report", Statements: 1, Covered: 0},
 	}
 	if len(cov.Packages) != len(want) {
 		t.Fatalf("packages = %+v, want %+v", cov.Packages, want)

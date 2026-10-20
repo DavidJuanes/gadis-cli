@@ -52,6 +52,12 @@ func (c Coverage) Covered() int {
 // the statements inside function declarations.
 func (c Coverage) Percent() float64 { return percent(c.Covered(), c.Statements()) }
 
+// isTestHelper reports whether pkg holds support code for the tests (fakes,
+// harnesses) rather than product code. Go marks those packages by convention
+// with a "test" suffix, like net/http/httptest; here, internal/gadistest,
+// internal/cli/clitest and scripts/ci/internal/ghtest.
+func isTestHelper(pkg string) bool { return strings.HasSuffix(path.Base(pkg), "test") }
+
 func percent(covered, statements int) float64 {
 	if statements == 0 {
 		return 0
@@ -61,7 +67,8 @@ func percent(covered, statements int) float64 {
 
 // ParseCoverProfile reads a profile written by `go test -coverprofile`, in any
 // mode. A block listed more than once (several test binaries covering the
-// same package) counts as covered if any of them ran it.
+// same package) counts as covered if any of them ran it. Test-helper packages
+// are left out (see isTestHelper).
 func ParseCoverProfile(r io.Reader) (Coverage, error) {
 	type block struct {
 		stmts   int
@@ -100,6 +107,9 @@ func ParseCoverProfile(r io.Reader) (Coverage, error) {
 	for key, b := range blocks {
 		file := key[:strings.LastIndex(key, ":")]
 		pkg := path.Dir(file)
+		if isTestHelper(pkg) {
+			continue
+		}
 		p := byPkg[pkg]
 		if p == nil {
 			p = &PackageCoverage{Package: pkg}

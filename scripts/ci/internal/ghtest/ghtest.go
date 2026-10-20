@@ -1,8 +1,8 @@
-// Package fakegh is a fake GitHub CLI for the tests of scripts/ci. The test
+// Package ghtest is a fake GitHub CLI for the tests of scripts/ci. The test
 // binary doubles as `gh`: Install puts a symlink named gh to it first on
 // PATH, and Main, called from TestMain, makes it record each call and answer
 // the calls that read from a fixture.
-package fakegh
+package ghtest
 
 import (
 	"encoding/json"
