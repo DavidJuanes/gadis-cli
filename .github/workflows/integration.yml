@@ -86,11 +86,26 @@ jobs:
           GADIS_EMAIL: ${{ secrets.GADIS_EMAIL }}
           GADIS_PASSWORD: ${{ secrets.GADIS_PASSWORD }}
       - name: Enmascara los datos de la cuenta
-        # Por si algo los imprimiera: nombre y códigos postales de la cuenta.
+        # Por si algo los imprimiera: todo texto de gadis whoami --json (email,
+        # nombre, códigos postales, tienda, carrito y, si llega a incluirla, la
+        # dirección) menos delivery_type, que es un enumerado. Ni la salida de
+        # gadis ni los errores de jq llegan al log, pero si no se puede leer el
+        # JSON el paso falla: correr los tests sin enmascarar no es una opción.
         run: |
-          "$RUNNER_TEMP/gadis" whoami --json 2>/dev/null |
-            jq -r '.name, .default_delivery.postal_code, .cart_postal_code | select(. != null and . != "")' 2>/dev/null |
-            while IFS= read -r value; do echo "::add-mask::$value"; done
+          if ! who=$("$RUNNER_TEMP/gadis" whoami --json 2>/dev/null); then
+            echo "::error::gadis whoami ha fallado (salida oculta: datos personales)"
+            exit 1
+          fi
+          if ! values=$(printf '%s' "$who" | jq -r '
+            if type != "object" then error("no es un objeto") else . end
+            | del(.. | .delivery_type?) | .. | strings | select(. != "")' 2>/dev/null); then
+            echo "::error::no se puede leer el JSON de gadis whoami: no se enmascaran los datos de la cuenta"
+            exit 1
+          fi
+          printf '%s\n' "$values" | while IFS= read -r value; do
+            if [ -n "$value" ]; then echo "::add-mask::$value"; fi
+          done
+          unset who values
       # Sin -v: un test que pasa no imprime nada y uno que falla solo dice qué
       # aserción ha fallado. Sin informe JUnit ni artefactos.
       - name: go test (catálogo, cuenta y carrito)
