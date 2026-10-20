@@ -4,10 +4,7 @@
 # Uso: sh scripts/test-install.sh
 set -eu
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
-work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
-fails=0
+. "$(dirname "$0")/testlib.sh"
 
 case "$(uname -s)" in Linux) os=linux ;; Darwin) os=darwin ;; esac
 case "$(uname -m)" in x86_64 | amd64) arch=amd64 ;; arm64 | aarch64) arch=arm64 ;; esac
@@ -66,26 +63,16 @@ chmod +x "$ghbin/gh"
 # run CASO CHECKSUMS(good|bad) GH(none|ok|fail): ejecuta install.sh y deja salida y estado en $work/CASO.
 run() {
   dir="$work/$1"
-  mkdir -p "$dir"
   path="$base"
   [ "$3" = none ] || path="$ghbin:$base"
   gh_exit=0
   [ "$3" = fail ] && gh_exit=1
-  set +e
-  env -i HOME="$dir" PATH="$path" GADIS_INSTALL_DIR="$dir/install" \
+  capture "$dir" env -i HOME="$dir" PATH="$path" GADIS_INSTALL_DIR="$dir/install" \
     FAKE_CHECKSUMS="$2" FAKE_GH_EXIT="$gh_exit" FAKE_GH_LOG="$dir/gh.log" \
-    sh "$root/install.sh" >"$dir/out" 2>&1
-  echo $? >"$dir/status"
-  set -e
+    sh "$root/install.sh"
 }
 
-fail() {
-  echo "FAIL $name: $*"
-  sed 's/^/    /' "$work/$name/out"
-  fails=$((fails + 1))
-}
 installed() { [ -x "$work/$name/install/gadis" ]; }
-status() { cat "$work/$name/status"; }
 output_has() { grep -q "$1" "$work/$name/out"; }
 
 name=checksum_ok_without_gh
@@ -117,8 +104,4 @@ run "$name" good fail
 [ "$(status)" != 0 ] || fail "sale con 0, se esperaba un error"
 ! installed || fail "instala gadis con una attestation que no verifica"
 
-if [ "$fails" -gt 0 ]; then
-  echo "$fails fallo(s)"
-  exit 1
-fi
-echo "install.sh: todas las pruebas pasan"
+finish install.sh

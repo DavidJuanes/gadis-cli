@@ -39,12 +39,13 @@ linters:
         - nto # de "cuánto": misspell corta la palabra en la tilde
   exclusions:
     rules:
-      # Los tests y sus arneses (el Gadisline falso de internal/gadistest y
-      # el de internal/cli/clitest) leen y copian ficheros temporales y
-      # fabrican cookies como las de Gadisline: gosec ahí no aporta.
+      # Los tests y sus arneses (el Gadisline falso de internal/gadistest, el
+      # de internal/cli/clitest y el gh falso de scripts/ci/internal/fakegh)
+      # leen y copian ficheros temporales y fabrican cookies como las de
+      # Gadisline: gosec ahí no aporta.
       - path: _test\.go
         linters: [gosec]
-      - path: internal/(gadistest|cli/clitest)/
+      - path: internal/(gadistest|cli/clitest|fakegh)/
         linters: [gosec]
 
 formatters:

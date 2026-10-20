@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,9 +10,15 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/DavidJuanes/gadis-cli/scripts/ci/internal/fakegh"
 )
 
 const module = "example.com/demo"
+
+// shared holds the fixtures of a test run (junit.xml, cover.out) shared with
+// internal/report.
+var shared = filepath.Join("..", "internal", "report", "testdata")
 
 func golden(t *testing.T, name string) string {
 	t.Helper()
@@ -38,8 +43,8 @@ func ciEnv(t *testing.T) (func(string) string, string) {
 
 func baseArgs() []string {
 	return []string{
-		"--junit", filepath.Join("testdata", "junit.xml"),
-		"--coverprofile", filepath.Join("testdata", "cover.out"),
+		"--junit", filepath.Join(shared, "junit.xml"),
+		"--coverprofile", filepath.Join(shared, "cover.out"),
 		"--module", module,
 	}
 }
@@ -64,89 +69,10 @@ func TestPushWritesSummaryAndAnnotatesFailures(t *testing.T) {
 	}
 }
 
-// The test binary doubles as a fake `gh`: when invoked through a symlink
-// named "gh" it records the call and answers the comment listing from a
-// fixture.
+// The fake gh answers the comment listing, the only call without --method,
+// with the fixture of PR comments.
 func TestMain(m *testing.M) {
-	if filepath.Base(os.Args[0]) == "gh" {
-		os.Exit(fakeGh())
-	}
-	os.Exit(m.Run())
-}
-
-type ghCall struct {
-	Args  []string `json:"args"`
-	Stdin string   `json:"stdin"`
-}
-
-func fakeGh() int {
-	args := os.Args[1:]
-	var stdin []byte
-	if slices.Contains(args, "body=@-") {
-		stdin, _ = io.ReadAll(os.Stdin)
-	}
-	line, _ := json.Marshal(ghCall{Args: args, Stdin: string(stdin)})
-	f, err := os.OpenFile(os.Getenv("FAKE_GH_LOG"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return 2
-	}
-	_, err = f.Write(append(line, '\n'))
-	if closeErr := f.Close(); err != nil || closeErr != nil {
-		return 2
-	}
-	if os.Getenv("FAKE_GH_FAIL") != "" {
-		return 1
-	}
-	if !slices.Contains(args, "--method") {
-		data, err := os.ReadFile(os.Getenv("FAKE_GH_COMMENTS"))
-		if err != nil {
-			return 2
-		}
-		_, _ = os.Stdout.Write(data)
-	}
-	return 0
-}
-
-// fakeGhEnv puts the fake gh first on PATH, serving the given fixture of PR
-// comments, and returns a function that reads the calls that write.
-func fakeGhEnv(t *testing.T, commentsFixture string) func() []ghCall {
-	t.Helper()
-	dir := t.TempDir()
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(exe, filepath.Join(dir, "gh")); err != nil {
-		t.Fatal(err)
-	}
-	abs, err := filepath.Abs(filepath.Join("testdata", commentsFixture))
-	if err != nil {
-		t.Fatal(err)
-	}
-	log := filepath.Join(dir, "calls.jsonl")
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("FAKE_GH_LOG", log)
-	t.Setenv("FAKE_GH_COMMENTS", abs)
-	return func() []ghCall {
-		data, err := os.ReadFile(log)
-		if os.IsNotExist(err) {
-			return nil
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		var calls []ghCall
-		for l := range strings.Lines(string(data)) {
-			var c ghCall
-			if err := json.Unmarshal([]byte(l), &c); err != nil {
-				t.Fatal(err)
-			}
-			if slices.Contains(c.Args, "--method") {
-				calls = append(calls, c)
-			}
-		}
-		return calls
-	}
+	fakegh.Main(m, func(args []string) bool { return !slices.Contains(args, "--method") })
 }
 
 // mainBadge serves the coverage badge of main, or 404 if body is empty, and
@@ -171,14 +97,14 @@ func prArgs(badgeURL string) []string {
 const main713 = `{"schemaVersion":1,"label":"cobertura","message":"71.3%","color":"yellow"}`
 
 func TestPRWithoutCommentCreatesOneWithDiffAgainstMain(t *testing.T) {
-	calls := fakeGhEnv(t, "no-comments.jsonl")
+	fake := fakegh.Install(t, "no-comments.jsonl")
 	getenv, _ := ciEnv(t)
 
 	if err := run(prArgs(mainBadge(t, main713)), getenv, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 
-	w := calls()
+	w := fake.Writes()
 	if len(w) != 1 {
 		t.Fatalf("want 1 write call, got %+v", w)
 	}
@@ -194,14 +120,14 @@ func TestPRWithoutCommentCreatesOneWithDiffAgainstMain(t *testing.T) {
 // existing-comment.jsonl has the bot's comment (99) and a user's comment that
 // quotes the marker (11), which must be left alone.
 func TestPRWithCommentEditsTheBotsOne(t *testing.T) {
-	calls := fakeGhEnv(t, "existing-comment.jsonl")
+	fake := fakegh.Install(t, "existing-comment.jsonl")
 	getenv, _ := ciEnv(t)
 
 	if err := run(prArgs(mainBadge(t, main713)), getenv, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 
-	w := calls()
+	w := fake.Writes()
 	if len(w) != 1 {
 		t.Fatalf("want 1 write call, got %+v", w)
 	}
@@ -215,7 +141,7 @@ func TestPRWithCommentEditsTheBotsOne(t *testing.T) {
 }
 
 func TestPRWithoutMainBadgeCommentsWithoutDiff(t *testing.T) {
-	calls := fakeGhEnv(t, "no-comments.jsonl")
+	fake := fakegh.Install(t, "no-comments.jsonl")
 	getenv, _ := ciEnv(t)
 	var stdout bytes.Buffer
 
@@ -223,7 +149,7 @@ func TestPRWithoutMainBadgeCommentsWithoutDiff(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := calls()
+	w := fake.Writes()
 	if len(w) != 1 {
 		t.Fatalf("want 1 write call, got %+v", w)
 	}
@@ -236,7 +162,7 @@ func TestPRWithoutMainBadgeCommentsWithoutDiff(t *testing.T) {
 }
 
 func TestPRWithUnreadableMainBadgeWarnsAndCommentsWithoutDiff(t *testing.T) {
-	calls := fakeGhEnv(t, "no-comments.jsonl")
+	fake := fakegh.Install(t, "no-comments.jsonl")
 	getenv, _ := ciEnv(t)
 	var stdout bytes.Buffer
 
@@ -244,7 +170,7 @@ func TestPRWithUnreadableMainBadgeWarnsAndCommentsWithoutDiff(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if w := calls(); len(w) != 1 || w[0].Stdin != golden(t, "comment-no-main.golden") {
+	if w := fake.Writes(); len(w) != 1 || w[0].Stdin != golden(t, "comment-no-main.golden") {
 		t.Errorf("want the comment without diff, got %+v", w)
 	}
 	if !strings.Contains(stdout.String(), "::warning::cobertura de main") {
@@ -253,8 +179,7 @@ func TestPRWithUnreadableMainBadgeWarnsAndCommentsWithoutDiff(t *testing.T) {
 }
 
 func TestCommentThatCannotBePublishedWarnsWithoutFailing(t *testing.T) {
-	fakeGhEnv(t, "no-comments.jsonl")
-	t.Setenv("FAKE_GH_FAIL", "1")
+	fakegh.Install(t, "no-comments.jsonl").Fail()
 	getenv, summary := ciEnv(t)
 	var stdout bytes.Buffer
 
@@ -285,7 +210,7 @@ func TestFailureWithoutLocationIsAnnotatedWithoutFile(t *testing.T) {
 	getenv, _ := ciEnv(t)
 	var stdout bytes.Buffer
 
-	args := []string{"--junit", junit, "--coverprofile", filepath.Join("testdata", "cover.out"), "--module", module}
+	args := []string{"--junit", junit, "--coverprofile", filepath.Join(shared, "cover.out"), "--module", module}
 	if err := run(args, getenv, &stdout); err != nil {
 		t.Fatal(err)
 	}

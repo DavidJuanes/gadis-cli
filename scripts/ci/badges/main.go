@@ -14,7 +14,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -42,25 +41,22 @@ func run(args []string) error {
 		return errors.New("--junit, --coverprofile, --govulncheck and --out are required")
 	}
 
-	cov, err := parseFile(*coverPath, report.ParseCoverProfile)
+	cov, err := report.ParseFile(*coverPath, report.ParseCoverProfile)
 	if err != nil {
 		return err
 	}
-	results, err := parseFile(*junitPath, report.ParseJUnit)
+	results, err := report.ParseFile(*junitPath, report.ParseJUnit)
 	if err != nil {
 		return err
 	}
-	if err := writeBadge(*out, report.CoverageBadge, coverageBadge(cov.Percent())); err != nil {
-		return err
-	}
-	vulns, err := parseFile(*vulnPath, countCalledVulns)
+	vulns, err := report.ParseFile(*vulnPath, countCalledVulns)
 	if err != nil {
 		return err
 	}
 	for name, b := range map[string]report.Badge{
 		report.CoverageBadge: coverageBadge(cov.Percent()),
-		testsFile:            testsBadge(results),
-		vulnsFile:            vulnsBadge(vulns),
+		report.TestsBadge:    testsBadge(results),
+		report.VulnsBadge:    vulnsBadge(vulns),
 	} {
 		if err := writeBadge(*out, name, b); err != nil {
 			return err
@@ -117,13 +113,6 @@ func countCalledVulns(r io.Reader) (int, error) {
 	return len(called), nil
 }
 
-// File names of the other KPIs on the badges branch, next to
-// report.CoverageBadge. The README points at them.
-const (
-	testsFile = "tests.json"
-	vulnsFile = "vulns.json"
-)
-
 // testsBadge counts the passing tests (subtests included, as gotestsum lists
 // them) and, in red, the failing ones.
 func testsBadge(r report.Results) report.Badge {
@@ -149,7 +138,7 @@ func coverageBadge(p float64) report.Badge {
 //	>= 50%  orange
 //	<  50%  red
 func coverageColor(p float64) string {
-	p = math.Round(p*10) / 10
+	p = report.RoundPercent(p)
 	switch {
 	case p >= 90:
 		return "brightgreen"
@@ -172,14 +161,4 @@ func writeBadge(dir, name string, b report.Badge) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, name), append(data, '\n'), 0o600)
-}
-
-func parseFile[T any](name string, parse func(io.Reader) (T, error)) (T, error) {
-	f, err := os.Open(name) //nolint:gosec // G304: the path comes from the workflow, which owns the runner
-	if err != nil {
-		var zero T
-		return zero, err
-	}
-	defer func() { _ = f.Close() }() // read-only
-	return parse(f)
 }

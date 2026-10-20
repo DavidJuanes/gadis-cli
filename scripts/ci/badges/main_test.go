@@ -6,12 +6,15 @@ import (
 	"testing"
 )
 
+// shared holds the fixtures of a test run shared with internal/report.
+var shared = filepath.Join("..", "internal", "report", "testdata")
+
 // inputs are the fixtures of a run: cover.out covers 75% of the statements,
 // junit.xml has 2 passing, 3 failing and 1 skipped test.
 func inputs(out string) []string {
 	return []string{
-		"--junit", filepath.Join("testdata", "junit.xml"),
-		"--coverprofile", filepath.Join("testdata", "cover.out"),
+		"--junit", filepath.Join(shared, "junit.xml"),
+		"--coverprofile", filepath.Join(shared, "cover.out"),
 		"--govulncheck", filepath.Join("testdata", "govulncheck-clean.json"),
 		"--out", out,
 	}

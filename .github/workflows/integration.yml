@@ -86,11 +86,26 @@ jobs:
           GADIS_EMAIL: ${{ secrets.GADIS_EMAIL }}
           GADIS_PASSWORD: ${{ secrets.GADIS_PASSWORD }}
       - name: Enmascara los datos de la cuenta
-        # Por si algo los imprimiera: nombre y códigos postales de la cuenta.
+        # Por si algo los imprimiera: todo texto de gadis whoami --json (email,
+        # nombre, códigos postales, tienda, carrito y, si llega a incluirla, la
+        # dirección) menos delivery_type, que es un enumerado. Ni la salida de
+        # gadis ni los errores de jq llegan al log, pero si no se puede leer el
+        # JSON el paso falla: correr los tests sin enmascarar no es una opción.
         run: |
-          "$RUNNER_TEMP/gadis" whoami --json 2>/dev/null |
-            jq -r '.name, .default_delivery.postal_code, .cart_postal_code | select(. != null and . != "")' 2>/dev/null |
-            while IFS= read -r value; do echo "::add-mask::$value"; done
+          if ! who=$("$RUNNER_TEMP/gadis" whoami --json 2>/dev/null); then
+            echo "::error::gadis whoami ha fallado (salida oculta: datos personales)"
+            exit 1
+          fi
+          if ! values=$(printf '%s' "$who" | jq -r '
+            if type != "object" then error("no es un objeto") else . end
+            | del(.. | .delivery_type?) | .. | strings | select(. != "")' 2>/dev/null); then
+            echo "::error::no se puede leer el JSON de gadis whoami: no se enmascaran los datos de la cuenta"
+            exit 1
+          fi
+          printf '%s\n' "$values" | while IFS= read -r value; do
+            if [ -n "$value" ]; then echo "::add-mask::$value"; fi
+          done
+          unset who values
       # Sin -v: un test que pasa no imprime nada y uno que falla solo dice qué
       # aserción ha fallado. Sin informe JUnit ni artefactos.
       - name: go test (catálogo, cuenta y carrito)
@@ -104,32 +119,14 @@ jobs:
           "$RUNNER_TEMP/gadis" logout >/dev/null 2>&1 || true
           rm -rf "$GADIS_HOME"
 
+  # Solo corre uno de los dos jobs, el otro sale skipped: failure-issue toma el
+  # resultado del que ha corrido.
   report:
     needs: [catalog, account]
     if: always()
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      # Solo corre uno de los dos jobs: el otro sale skipped.
-      - run: |
-          status=skipped
-          for result in "$CATALOG" "$ACCOUNT"; do
-            case "$result" in
-              failure) status=failure ;;
-              success | cancelled) [ "$status" = skipped ] && status="$result" ;;
-            esac
-          done
-          go run ./scripts/ci/failure-issue --status "$status"
-        env:
-          CATALOG: ${{ needs.catalog.result }}
-          ACCOUNT: ${{ needs.account.result }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+    uses: ./.github/workflows/failure-issue.yml
+    with:
+      results: ${{ needs.catalog.result }} ${{ needs.account.result }}

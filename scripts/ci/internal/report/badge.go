@@ -5,12 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 )
 
-// CoverageBadge is the file name of the coverage KPI on the badges branch.
-const CoverageBadge = "coverage.json"
+// File names of the KPIs on the badges branch. The README points at them.
+const (
+	CoverageBadge = "coverage.json"
+	TestsBadge    = "tests.json"
+	VulnsBadge    = "vulns.json"
+)
 
 // Badge is a KPI in the shields.io endpoint format, one JSON file per KPI on
 // the orphan branch badges (ADR-0002).
@@ -41,7 +46,11 @@ func ParseBadge(r io.Reader) (Badge, error) {
 
 // FormatPercent is how coverage is written everywhere: one decimal and "%".
 // A coverage badge's message is FormatPercent of the total.
-func FormatPercent(p float64) string { return strconv.FormatFloat(p, 'f', 1, 64) + "%" }
+func FormatPercent(p float64) string { return strconv.FormatFloat(RoundPercent(p), 'f', 1, 64) + "%" }
+
+// RoundPercent rounds p to the one decimal FormatPercent shows, so that
+// figures compared or colored match the ones written.
+func RoundPercent(p float64) float64 { return math.Round(p*10) / 10 }
 
 // Percent reads back a message written with FormatPercent.
 func (b Badge) Percent() (float64, error) {
