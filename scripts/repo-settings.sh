@@ -1,9 +1,10 @@
 #!/bin/sh
 # Aplica la configuración versionada del repo con `gh api`: ajustes de merge, funciones de
-# seguridad, el Environment integration (solo desde main), las immutable releases y los rulesets
-# de .github/rulesets/ (main y los de los tags v*), que se crean o se actualizan por nombre y
-# target. Idempotente: se puede ejecutar las veces que haga falta. Necesita gh, jq y permisos de
-# admin sobre el repo. Se prueba con scripts/test-repo-settings.sh.
+# seguridad, el Environment integration (solo desde main), las immutable releases, las etiquetas
+# breaking y skip-changelog (si faltan) y los rulesets de .github/rulesets/ (main y los de los
+# tags v*), que se crean o se actualizan por nombre y target. Idempotente: se puede ejecutar las
+# veces que haga falta. Necesita gh, jq y permisos de admin sobre el repo. Se prueba con
+# scripts/test-repo-settings.sh.
 # Uso: sh scripts/repo-settings.sh [OWNER/REPO]
 set -eu
 
@@ -68,6 +69,21 @@ echo "Environment integration restringido a main."
 # crea como borrador, sube todo y la publica al final, así que no choca con esto.
 gh api -X PUT "repos/$repo/immutable-releases" --silent
 echo "Immutable releases activadas."
+
+# Etiquetas de las notas de la release (.github/release.yml) que GitHub no trae de serie. Solo se
+# crean si faltan: si ya existen, no se tocan.
+labels="$(gh api "repos/$repo/labels" --paginate --jq '.[].name')"
+for label in "breaking b60205 Cambio incompatible: sube el minor en 0.x" \
+  "skip-changelog ededed Fuera de las notas de la release"; do
+  lname="${label%% *}"
+  rest="${label#* }"
+  if ! echo "$labels" | grep -qx "$lname"; then
+    jq -n --arg name "$lname" --arg color "${rest%% *}" --arg description "${rest#* }" \
+      '{name: $name, color: $color, description: $description}' |
+      gh api -X POST "repos/$repo/labels" --input - --silent
+    echo "Etiqueta $lname creada."
+  fi
+done
 
 # Los rulesets van al final: el de main exige checks que ya deben existir. Los tags v* llevan
 # dos, porque el bypass vale para todo un ruleset: tags-v-creacion (solo el admin crea tags) y

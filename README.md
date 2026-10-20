@@ -121,7 +121,7 @@ gh workflow run integration.yml --ref main -f forzar_fallo=true # prueba el avis
 
 Con `cuenta`, el job hace `gadis login` sobre un `GADIS_HOME` temporal con los secretos `GADIS_EMAIL` y `GADIS_PASSWORD` del Environment `integration` (restringido a la rama `main`) y corre los tests sin `-v` con `GADIS_INTEGRATION_ACCOUNT=1`. Como los logs de un repo público son públicos, el email y los datos de la cuenta se enmascaran, la salida de `gadis login` no se muestra y no se sube ningún artefacto. Dos ejecuciones nunca coinciden (`concurrency`), y un fallo abre un issue como los workflows programados.
 
-Las releases se publican con GoReleaser al subir una etiqueta `v*`.
+Las releases se publican con GoReleaser al subir una etiqueta `v*`. Las notas las genera GitHub a partir de los PR, agrupados por etiqueta según [`.github/release.yml`](.github/release.yml): `breaking` (⚠️ Cambios incompatibles), `enhancement` (Novedades), `bug` (Correcciones), `dependencies` (Dependencias) y el resto en Otros. Un PR con `skip-changelog` queda fuera. No hay `CHANGELOG.md`: el changelog son las páginas de [Releases](https://github.com/DavidJuanes/gadis-cli/releases).
 
 ## Calidad y seguridad
 
@@ -135,9 +135,9 @@ Cada PR y cada push a `main` pasan por [`ci.yml`](.github/workflows/ci.yml), con
 | `lint` | [golangci-lint](https://golangci-lint.run) con [`.golangci.yml`](.golangci.yml), [actionlint](https://github.com/rhysd/actionlint) sobre `.github/workflows` y que `go mod tidy` no cambie nada |
 | `vuln` | [govulncheck](https://go.dev/doc/security/vuln/) sobre las dependencias que el código usa de verdad |
 | `secrets` | [gitleaks](https://github.com/gitleaks/gitleaks) sobre todo el historial, con [`.gitleaks.toml`](.gitleaks.toml) |
-| `build` | `goreleaser build --snapshot` para las 6 plataformas de la release |
+| `build` | `goreleaser check` sobre `.goreleaser.yaml` y `goreleaser build --snapshot` para las 6 plataformas de la release |
 | `install-sh` | `scripts/test-install.sh`: que `install.sh` aborta si el checksum o la attestation no cuadran |
-| `repo-settings` | `scripts/test-repo-settings.sh`: que `scripts/repo-settings.sh` crea o actualiza los rulesets (`main` y tags `v*`) sin duplicarlos, que activa las *immutable releases*, que el Environment `integration` solo admite `main` y que los checks que exige son jobs que existen |
+| `repo-settings` | `scripts/test-repo-settings.sh`: que `scripts/repo-settings.sh` crea o actualiza los rulesets (`main` y tags `v*`) sin duplicarlos, que activa las *immutable releases*, que crea las etiquetas `breaking` y `skip-changelog` solo si faltan, que el Environment `integration` solo admite `main` y que los checks que exige son jobs que existen |
 | `release-guard` | `scripts/test-release-guard.sh`: que `scripts/release-guard.sh`, el primer paso de `release.yml`, aborta si el tag no es `vX.Y.Z` estricto o si su commit no está en `main` |
 | `badges` | Solo en push a `main`: [`scripts/ci/badges`](scripts/ci/badges) genera `coverage.json`, `tests.json` y `vulns.json` (formato *endpoint* de shields.io) a partir de los resultados de `test` y `vuln` y los publica en la rama huérfana `badges` en un único commit que reemplaza al anterior ([ADR-0002](docs/adr/0002-kpis-en-la-rama-badges.md)). De ahí salen los badges de KPIs y la cobertura de `main` del comentario de los PR |
 
@@ -152,6 +152,7 @@ go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 go mod tidy && git diff --exit-code -- go.mod go.sum
 go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 gitleaks git                       # gitleaks v8
+goreleaser check
 goreleaser build --snapshot --clean
 ```
 

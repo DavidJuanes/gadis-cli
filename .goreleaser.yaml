@@ -21,8 +21,10 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# Las notas las genera GitHub a partir de los PR, agrupados por etiqueta según
+# .github/release.yml.
 changelog:
-  use: github
+  use: github-native
 
 # Con las immutable releases activadas, una release publicada ya no admite archivos nuevos.
 # GoReleaser la crea como borrador, sube todo y la publica al final (no hay que tocar `draft`).

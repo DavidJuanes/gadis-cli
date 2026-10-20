@@ -10,7 +10,8 @@ repo=DavidJuanes/gadis-cli
 # gh falso: solo entiende `gh api [-X MÉTODO] RUTA [--input F] [--jq EXPR] [--paginate]`.
 # Estado en $FAKE_GH_STATE: rulesets.json (lista de {id, name, target}; el GET filtra por
 # ?targets=, que por defecto es branch) y ruleset-ID.json (cada ruleset),
-# env-integration.json (el Environment) y policies.json (sus reglas de ramas de despliegue).
+# env-integration.json (el Environment), policies.json (sus reglas de ramas de despliegue) y
+# labels.json (las etiquetas del repo).
 # Cada llamada se registra en $FAKE_GH_STATE/calls como "MÉTODO RUTA".
 ghbin="$work/ghbin"
 mkdir -p "$ghbin"
@@ -54,6 +55,7 @@ out() {
 }
 [ -f "$s/rulesets.json" ] || echo '[]' >"$s/rulesets.json"
 [ -f "$s/policies.json" ] || echo '[]' >"$s/policies.json"
+[ -f "$s/labels.json" ] || echo '[]' >"$s/labels.json"
 policies="repos/$FAKE_GH_REPO/environments/integration/deployment-branch-policies"
 case "$method ${path%%\?*}" in
   "GET repos/$FAKE_GH_REPO/rulesets")
@@ -102,6 +104,15 @@ case "$method ${path%%\?*}" in
     id="${path##*/}"
     jq --argjson id "$id" 'map(select(.id != $id))' "$s/policies.json" >"$s/tmp" &&
       mv "$s/tmp" "$s/policies.json" ;;
+  "GET repos/$FAKE_GH_REPO/labels") out <"$s/labels.json" ;;
+  "POST repos/$FAKE_GH_REPO/labels")
+    name="$(jq -r .name "$body")"
+    if jq -e --arg n "$name" 'any(.[]; .name == $n)' "$s/labels.json" >/dev/null; then
+      echo "gh: HTTP 422 (la etiqueta $name ya existe)" >&2
+      exit 1
+    fi
+    jq --slurpfile b "$body" '. + $b' "$s/labels.json" >"$s/tmp" && mv "$s/tmp" "$s/labels.json"
+    out <"$body" ;;
   *) echo "gh falso: llamada inesperada $method $path" >&2; exit 1 ;;
 esac
 GH
@@ -190,7 +201,7 @@ run "$name"
 [ "$(status)" = 0 ] || fail "la primera ejecución sale con $(status)"
 mkdir -p "$work/snap"
 cp "$(state)"/rulesets.json "$(state)"/ruleset-*.json "$(state)"/repo.json \
-  "$(state)"/env-integration.json "$(state)"/policies.json "$work/snap/"
+  "$(state)"/env-integration.json "$(state)"/policies.json "$(state)"/labels.json "$work/snap/"
 run "$name"
 [ "$(status)" = 0 ] || fail "la segunda ejecución sale con $(status)"
 n="$(ls "$root"/.github/rulesets/*.json | wc -l)"
@@ -199,9 +210,30 @@ for id in $(jq -r '.[].id' "$(state)/rulesets.json"); do
   [ "$(count "PUT repos/$repo/rulesets/$id")" = 1 ] || fail "la segunda ejecución no actualiza el ruleset $id"
 done
 [ "$(jq length "$(state)/rulesets.json")" = "$n" ] || fail "hay rulesets duplicados"
+[ "$(count "POST repos/$repo/labels")" = 2 ] || fail "la segunda ejecución vuelve a crear etiquetas"
 for f in "$work"/snap/*; do
   cmp -s "$f" "$(state)/${f##*/}" || fail "el estado cambia en la segunda ejecución: ${f##*/}"
 done
+
+# Las notas de la release agrupan los PR por etiqueta: breaking y skip-changelog no vienen de
+# serie en GitHub, así que se crean.
+name=creates_labels
+run "$name"
+[ "$(status)" = 0 ] || fail "sale con $(status), se esperaba 0"
+got="$(jq -c '[.[].name] | sort' "$(state)/labels.json")"
+[ "$got" = '["breaking","skip-changelog"]' ] || fail "no crea breaking y skip-changelog: $got"
+
+# Si ya existen (aunque sea con otro color o descripción), no se tocan.
+name=keeps_existing_labels
+mkdir -p "$(state)"
+echo '[{"name": "bug"}, {"name": "breaking", "color": "000000"}]' >"$(state)/labels.json"
+run "$name"
+[ "$(status)" = 0 ] || fail "sale con $(status), se esperaba 0"
+got="$(jq -c '[.[] | select(.name == "breaking")]' "$(state)/labels.json")"
+[ "$got" = '[{"name":"breaking","color":"000000"}]' ] || fail "toca la etiqueta breaking existente: $got"
+[ "$(count "POST repos/$repo/labels")" = 1 ] || fail "no crea solo skip-changelog"
+jq -e 'any(.[]; .name == "skip-changelog")' "$(state)/labels.json" >/dev/null ||
+  fail "no crea skip-changelog"
 
 # El Environment integration (credenciales de los tests de cuenta) solo se despliega desde main.
 name=creates_integration_environment
