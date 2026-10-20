@@ -1,5 +1,8 @@
 # gadis-cli
 
+[![CodeQL](https://github.com/DavidJuanes/gadis-cli/actions/workflows/codeql.yml/badge.svg)](https://github.com/DavidJuanes/gadis-cli/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/DavidJuanes/gadis-cli/badge)](https://scorecard.dev/viewer/?uri=github.com/DavidJuanes/gadis-cli)
+
 CLI para hacer la compra en [Gadisline](https://www.gadisline.com), la tienda online de los supermercados Gadis: buscar productos, ver categorías y gestionar el carrito de tu cuenta desde la terminal o desde scripts, LLMs y otras automatizaciones.
 
 > Proyecto no oficial, sin relación con Gadisa Retail. Usa la API privada de la web, que puede cambiar sin aviso. Cómo funciona por dentro: [docs/api.md](docs/api.md).
@@ -104,6 +107,14 @@ Las releases se publican con GoReleaser al subir una etiqueta `v*`.
 ### Dependencias
 
 Dependabot revisa cada semana los módulos de Go y las actions (`.github/dependabot.yml`). Las actualizaciones minor y patch llegan agrupadas en un PR por ecosistema y se ponen en auto-merge (squash): se mergean solas cuando pasan los checks obligatorios. Las major llegan en PRs separados y se revisan a mano.
+
+### Análisis de seguridad programados
+
+- **CodeQL** (`codeql.yml`) analiza el código Go en cada PR, en cada push a `main` y cada semana. Las alertas aparecen en la pestaña Security.
+- **OpenSSF Scorecard** (`scorecard.yml`) mide las prácticas de la cadena de suministro en cada push a `main` y cada semana, y publica la puntuación del badge. Solo informa.
+- **govulncheck diario** (`vuln-scheduled.yml`) revisa `main` cada día, para enterarse de CVE nuevos aunque nadie haga push.
+
+Si una ejecución programada o lanzada a mano falla, `scripts/ci/failure-issue` abre un issue `needs-triage` con el enlace a la ejecución, o comenta el que ya esté abierto para ese workflow, y lo cierra cuando vuelve a pasar. Para probarlo, lanza `vuln-scheduled` a mano con `forzar_fallo`.
 
 ## Licencia
 
