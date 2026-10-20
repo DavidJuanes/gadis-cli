@@ -1,0 +1,37 @@
+name: failure-issue
+
+# Workflow reutilizable: el job report de los workflows programados. Abre un
+# issue needs-triage si han fallado (o comenta el que ya está abierto) y lo
+# cierra cuando vuelven a pasar (scripts/ci/failure-issue). Cada workflow
+# decide cuándo llamarlo y le da sus permisos (contents: read, issues: write).
+
+on:
+  workflow_call:
+    inputs:
+      results:
+        description: Resultados de los jobs vigilados, separados por espacios (needs.<job>.result)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # GITHUB_WORKFLOW es el nombre del workflow que llama: un issue por workflow.
+      - run: go run ./scripts/ci/failure-issue --status "$RESULTS"
+        env:
+          RESULTS: ${{ inputs.results }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}

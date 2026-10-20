@@ -1,0 +1,132 @@
+name: integration
+
+# Tests de integración contra Gadisline real (go test -tags integration), para
+# enterarse pronto de que la API privada ha cambiado.
+#
+# - Catálogo: a diario y a mano. Sin sesión ni secretos.
+# - Cuenta y carrito: solo a mano, con la entrada cuenta. Usa la cuenta personal
+#   del mantenedor (secretos GADIS_EMAIL y GADIS_PASSWORD del Environment
+#   integration, restringido a main). Los logs de un repo público los lee
+#   cualquiera: el email y los datos de la cuenta se enmascaran, la salida de
+#   gadis login no se muestra, los tests van sin -v y sus mensajes nunca
+#   muestran la salida de los comandos (clitest.CLI.Private). No se sube
+#   ningún artefacto.
+#
+# Si falla, el job report abre un issue needs-triage (o comenta el que ya está
+# abierto) y lo cierra cuando vuelve a pasar. Para probar el aviso y que un
+# fallo no filtra datos, lánzalo a mano con forzar_fallo.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      cuenta:
+        description: Corre también los tests de cuenta y carrito con la cuenta del mantenedor (solo desde main)
+        type: boolean
+        default: false
+      forzar_fallo:
+        description: Hace fallar la ejecución a propósito para probar el issue de aviso
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Nunca dos ejecuciones a la vez sobre la misma cuenta y el mismo carrito.
+concurrency:
+  group: integration
+  cancel-in-progress: false
+
+jobs:
+  catalog:
+    if: ${{ !inputs.cuenta }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # Sin GADIS_INTEGRATION_ACCOUNT los tests de cuenta y carrito se saltan.
+      - run: go test -tags integration -v ./...
+      - if: inputs.forzar_fallo
+        run: |
+          echo "::error::Fallo forzado con forzar_fallo"
+          exit 1
+
+  account:
+    if: ${{ inputs.cuenta }}
+    runs-on: ubuntu-latest
+    environment: integration
+    steps:
+      - name: Enmascara el email de la cuenta
+        run: |
+          echo "::add-mask::$GADIS_EMAIL"
+          echo "GADIS_HOME=$RUNNER_TEMP/gadis-home" >> "$GITHUB_ENV"
+        env:
+          GADIS_EMAIL: ${{ secrets.GADIS_EMAIL }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go build -o "$RUNNER_TEMP/gadis" ./cmd/gadis
+      - name: gadis login
+        # La salida (email y nombre) nunca llega al log.
+        run: |
+          mkdir -p "$GADIS_HOME"
+          if ! "$RUNNER_TEMP/gadis" login >/dev/null 2>&1; then
+            echo "::error::gadis login ha fallado (salida oculta: datos personales)"
+            exit 1
+          fi
+        env:
+          GADIS_EMAIL: ${{ secrets.GADIS_EMAIL }}
+          GADIS_PASSWORD: ${{ secrets.GADIS_PASSWORD }}
+      - name: Enmascara los datos de la cuenta
+        # Por si algo los imprimiera: todo texto de gadis whoami --json (email,
+        # nombre, códigos postales, tienda, carrito y, si llega a incluirla, la
+        # dirección) menos delivery_type, que es un enumerado. Ni la salida de
+        # gadis ni los errores de jq llegan al log, pero si no se puede leer el
+        # JSON el paso falla: correr los tests sin enmascarar no es una opción.
+        run: |
+          if ! who=$("$RUNNER_TEMP/gadis" whoami --json 2>/dev/null); then
+            echo "::error::gadis whoami ha fallado (salida oculta: datos personales)"
+            exit 1
+          fi
+          if ! values=$(printf '%s' "$who" | jq -r '
+            if type != "object" then error("no es un objeto") else . end
+            | del(.. | .delivery_type?) | .. | strings | select(. != "")' 2>/dev/null); then
+            echo "::error::no se puede leer el JSON de gadis whoami: no se enmascaran los datos de la cuenta"
+            exit 1
+          fi
+          printf '%s\n' "$values" | while IFS= read -r value; do
+            if [ -n "$value" ]; then echo "::add-mask::$value"; fi
+          done
+          unset who values
+      # Sin -v: un test que pasa no imprime nada y uno que falla solo dice qué
+      # aserción ha fallado. Sin informe JUnit ni artefactos.
+      - name: go test (catálogo, cuenta y carrito)
+        run: GADIS_TEST_HOME="$GADIS_HOME" go test -tags integration ./...
+        env:
+          GADIS_INTEGRATION_ACCOUNT: "1"
+          GADIS_INTEGRATION_FORCE_FAILURE: ${{ inputs.forzar_fallo && '1' || '' }}
+      - name: gadis logout
+        if: always()
+        run: |
+          "$RUNNER_TEMP/gadis" logout >/dev/null 2>&1 || true
+          rm -rf "$GADIS_HOME"
+
+  # Solo corre uno de los dos jobs, el otro sale skipped: failure-issue toma el
+  # resultado del que ha corrido.
+  report:
+    needs: [catalog, account]
+    if: always()
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/failure-issue.yml
+    with:
+      results: ${{ needs.catalog.result }} ${{ needs.account.result }}

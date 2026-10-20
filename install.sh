@@ -37,6 +37,14 @@ else
 fi
 [ -n "$expected" ] && [ "$expected" = "$actual" ] || { echo "La suma SHA-256 no coincide" >&2; exit 1; }
 
+if command -v gh >/dev/null 2>&1; then
+  echo "Verificando la attestation de procedencia con gh…"
+  gh attestation verify "$tmp/$archive" --repo "$REPO" >/dev/null ||
+    { echo "La attestation de $archive no verifica: no se instala. (¿Has iniciado sesión con \`gh auth login\`?)" >&2; exit 1; }
+else
+  echo "gh no está instalado: se omite la verificación de la attestation (solo se ha comprobado el SHA-256)." >&2
+fi
+
 tar -xzf "$tmp/$archive" -C "$tmp" gadis
 mkdir -p "$DIR"
 install -m 0755 "$tmp/gadis" "$DIR/gadis"

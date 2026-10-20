@@ -42,7 +42,7 @@ type Jar struct {
 // LoadJar reads the jar at path. A missing file yields an empty jar.
 func LoadJar(path string) (*Jar, error) {
 	j := &Jar{path: path, now: time.Now}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: the session file path under GADIS_HOME is ours to choose
 	if errors.Is(err, os.ErrNotExist) {
 		return j, nil
 	}
@@ -171,7 +171,9 @@ func (j *Jar) Cookies(u *url.URL) []*http.Cookie {
 		if c.Secure && u.Scheme != "https" {
 			continue
 		}
-		out = append(out, &http.Cookie{Name: c.Name, Value: c.Value})
+		// Cookies for a request header only carry name and value; Secure,
+		// HttpOnly and SameSite belong to Set-Cookie and are enforced above.
+		out = append(out, &http.Cookie{Name: c.Name, Value: c.Value}) //nolint:gosec // G124: request cookie, see above
 	}
 	return out
 }

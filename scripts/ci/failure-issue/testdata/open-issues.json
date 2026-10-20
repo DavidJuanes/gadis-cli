@@ -1,0 +1,5 @@
+[
+  {"number": 40, "body": "<!-- failure-issue: codeql -->\nHa fallado el workflow programado `codeql`."},
+  {"number": 41, "body": "Un issue cualquiera que menciona vuln-scheduled sin marcador."},
+  {"number": 42, "body": "<!-- failure-issue: vuln-scheduled -->\nHa fallado el workflow programado `vuln-scheduled`."}
+]

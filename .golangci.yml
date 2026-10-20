@@ -1,0 +1,54 @@
+# golangci-lint v2. Lo ejecuta el job `lint` de .github/workflows/ci.yml;
+# en local, `golangci-lint run`.
+version: "2"
+
+run:
+  # Que el lint vea también los tests de integración contra Gadisline real.
+  build-tags: [integration]
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gosec
+    - errorlint
+    - bodyclose
+    - noctx
+    - misspell
+    - revive
+    - gocritic
+  settings:
+    errcheck:
+      # La salida del CLI va a la terminal (o, en el Gadisline falso, a un
+      # ResponseWriter): si escribir ahí falla no queda a quién avisar.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    misspell:
+      # misspell solo sabe inglés y los textos del CLI están en español.
+      ignore-rules:
+        - argumentos
+        - comando
+        - producto
+        - productos
+        - nto # de "cuánto": misspell corta la palabra en la tilde
+  exclusions:
+    rules:
+      # Los tests y sus arneses (el Gadisline falso de internal/gadistest, el
+      # de internal/cli/clitest y el gh falso de scripts/ci/internal/ghtest)
+      # leen y copian ficheros temporales y fabrican cookies como las de
+      # Gadisline: gosec ahí no aporta.
+      - path: _test\.go
+        linters: [gosec]
+      - path: internal/(gadistest|cli/clitest|ghtest)/
+        linters: [gosec]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

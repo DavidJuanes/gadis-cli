@@ -55,9 +55,9 @@ func TestGuardCartRestoresWhenTestStopsHalfWay(t *testing.T) {
 		if !SameLines(got, start) {
 			t.Fatalf("GuardCart returned %v, want the starting lines %v", got, start)
 		}
-		cart.Set("test-product", 3) // added by the test
-		cart.Set("milk", 2)         // changed
-		cart.Set("bread", 0)        // removed
+		_ = cart.Set("test-product", 3) // added by the test
+		_ = cart.Set("milk", 2)         // changed
+		_ = cart.Set("bread", 0)        // removed
 		t.SkipNow()
 		t.Error("not reached")
 	})
@@ -74,7 +74,7 @@ func TestGuardCartOnlyWritesChangedLines(t *testing.T) {
 
 	t.Run("test", func(t *testing.T) {
 		GuardCart(t, cart)
-		cart.Set("test-product", 1)
+		_ = cart.Set("test-product", 1)
 		cart.sets = nil
 	})
 
@@ -91,8 +91,8 @@ func TestGuardCartRestoresAnEmptyCart(t *testing.T) {
 		if got := GuardCart(t, cart); len(got) != 0 {
 			t.Errorf("GuardCart = %v, want no lines", got)
 		}
-		cart.Set("a", 1)
-		cart.Set("b", 0.5)
+		_ = cart.Set("a", 1)
+		_ = cart.Set("b", 0.5)
 	})
 
 	if len(cart.lines) != 0 {
@@ -123,6 +123,39 @@ func TestRestoreCartChecksTheResult(t *testing.T) {
 
 	if err := restoreCart(cart, nil); err == nil {
 		t.Fatal("restoreCart succeeded but the cart still has the test product")
+	}
+}
+
+// privateCart is a memCart whose lines are personal data.
+type privateCart struct{ memCart }
+
+func (*privateCart) Private() bool { return true }
+
+// When a private cart (the maintainer's real one) can't be restored, the
+// error says how many lines it had but never which products.
+func TestRestoreCartHidesWhatAPrivateCartHad(t *testing.T) {
+	cart := &privateCart{memCart{lines: []CartLine{{"test-product", 2}}, failSet: errors.New("boom")}}
+
+	err := restoreCart(cart, []CartLine{{"milk", 6}, {"bread", 1}})
+	if err == nil {
+		t.Fatal("restoreCart succeeded with a cart that rejects every change")
+	}
+	for _, personal := range []string{"milk", "bread", "test-product", "6"} {
+		if strings.Contains(err.Error(), personal) {
+			t.Errorf("error %q shows %q", err, personal)
+		}
+	}
+	if !strings.Contains(err.Error(), "2 lines") {
+		t.Errorf("error %q does not say how many lines the cart had", err)
+	}
+}
+
+// The CLI cart of a private CLI is private.
+func TestCLICartOfAPrivateCLIIsPrivate(t *testing.T) {
+	gadis := New(t, gadistest.New(t))
+	gadis.Private = true
+	if p, ok := CLICart(t, gadis).(interface{ Private() bool }); !ok || !p.Private() {
+		t.Error("CLICart of a private CLI is not private")
 	}
 }
 

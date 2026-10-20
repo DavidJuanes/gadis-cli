@@ -1,0 +1,2 @@
+::error file=calc/calc_test.go,line=13,title=TestDivFails::bad
+::error file=greet/greet_test.go,line=13,title=TestHello/nombre::bad

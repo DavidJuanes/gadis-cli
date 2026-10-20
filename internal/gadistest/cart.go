@@ -115,6 +115,6 @@ func (c *Cart) register(mux *http.ServeMux, s *Server) {
 			p = s.Catalog.Products[i]
 		}
 		c.set(p, *body.Amount)
-		json.NewEncoder(w).Encode(c.nextData())
+		_ = json.NewEncoder(w).Encode(c.nextData())
 	})
 }

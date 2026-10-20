@@ -1,0 +1,137 @@
+// Command failure-issue keeps one GitHub issue per scheduled workflow in sync
+// with the workflow's latest result: a failure opens a needs-triage issue (or
+// comments on the one already open), and the next success closes it.
+//
+// It is meant to run as the last job of a scheduled workflow:
+//
+//	go run ./scripts/ci/failure-issue --status "${{ needs.<job>.result }} ..."
+//
+// with GH_TOKEN set and the standard GITHUB_* variables of Actions.
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+
+	ghcli "github.com/DavidJuanes/gadis-cli/scripts/ci/internal/gh"
+)
+
+func main() {
+	if err := run(os.Args[1:], os.Getenv); err != nil {
+		fmt.Fprintln(os.Stderr, "failure-issue:", err)
+		os.Exit(1)
+	}
+}
+
+func run(args []string, getenv func(string) string) error {
+	fs := flag.NewFlagSet("failure-issue", flag.ContinueOnError)
+	statuses := fs.String("status", "", "results of the watched jobs, separated by spaces: success, failure, cancelled or skipped")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	status, err := combine(strings.Fields(*statuses))
+	if err != nil {
+		return err
+	}
+
+	workflow := getenv("GITHUB_WORKFLOW")
+	if workflow == "" {
+		return errors.New("GITHUB_WORKFLOW is not set")
+	}
+	runURL := fmt.Sprintf("%s/%s/actions/runs/%s",
+		getenv("GITHUB_SERVER_URL"), getenv("GITHUB_REPOSITORY"), getenv("GITHUB_RUN_ID"))
+	marker := fmt.Sprintf("<!-- failure-issue: %s -->", workflow)
+
+	ctx := context.Background()
+	switch status {
+	case "failure":
+		open, err := findOpenIssue(ctx, marker)
+		if err != nil {
+			return err
+		}
+		if open != 0 {
+			return gh(ctx, fmt.Sprintf("Ha vuelto a fallar: %s\n", runURL),
+				"issue", "comment", strconv.Itoa(open), "--body-file", "-")
+		}
+		return gh(ctx, failureBody(workflow, runURL, marker),
+			"issue", "create",
+			"--title", "Falla el workflow programado "+workflow,
+			"--label", "needs-triage",
+			"--body-file", "-")
+	case "success":
+		open, err := findOpenIssue(ctx, marker)
+		if err != nil || open == 0 {
+			return err
+		}
+		return gh(ctx, "", "issue", "close", strconv.Itoa(open),
+			"--comment", fmt.Sprintf("Vuelve a pasar: %s\n", runURL))
+	default: // cancelled or skipped: says nothing about the health of the workflow.
+		return nil
+	}
+}
+
+// combine turns the results of the watched jobs into the workflow's: failure
+// if any failed, else cancelled if any was cancelled, else success if any
+// passed, else skipped (none ran). A workflow whose jobs run one or another,
+// as integration.yml, gets the result of the one that ran.
+func combine(results []string) (string, error) {
+	if len(results) == 0 {
+		return "", errors.New("--status is required")
+	}
+	seen := map[string]bool{}
+	for _, r := range results {
+		switch r {
+		case "success", "failure", "cancelled", "skipped":
+			seen[r] = true
+		default:
+			return "", fmt.Errorf("unknown --status %q (want success, failure, cancelled or skipped)", r)
+		}
+	}
+	for _, r := range []string{"failure", "cancelled", "success"} {
+		if seen[r] {
+			return r, nil
+		}
+	}
+	return "skipped", nil
+}
+
+func failureBody(workflow, runURL, marker string) string {
+	return fmt.Sprintf("%s\nHa fallado el workflow programado `%s`.\n\nEjecución: %s\n\n"+
+		"Este issue lo gestiona `scripts/ci/failure-issue`: los siguientes fallos se comentan aquí "+
+		"y se cierra solo cuando el workflow vuelve a pasar.\n", marker, workflow, runURL)
+}
+
+// findOpenIssue returns the number of the open issue whose body carries
+// marker, or 0 if there is none. It filters locally instead of using GitHub
+// search, whose index lags behind and could duplicate the issue.
+func findOpenIssue(ctx context.Context, marker string) (int, error) {
+	out, err := ghcli.Run(ctx, "", "issue", "list", "--state", "open", "--limit", "1000", "--json", "number,body")
+	if err != nil {
+		return 0, err
+	}
+	var issues []struct {
+		Number int    `json:"number"`
+		Body   string `json:"body"`
+	}
+	if err := json.Unmarshal(out, &issues); err != nil {
+		return 0, fmt.Errorf("parse gh issue list: %w", err)
+	}
+	for _, is := range issues {
+		if strings.Contains(is.Body, marker) {
+			return is.Number, nil
+		}
+	}
+	return 0, nil
+}
+
+// gh runs the gh CLI with body on stdin.
+func gh(ctx context.Context, body string, args ...string) error {
+	_, err := ghcli.Run(ctx, body, args...)
+	return err
+}

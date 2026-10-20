@@ -3,6 +3,7 @@ package gadis
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,8 +19,10 @@ func TestSearchRequest(t *testing.T) {
 			return
 		}
 		gotHeader, gotQuery = r.Header.Clone(), r.URL.RawQuery
-		json.NewDecoder(r.Body).Decode(&gotBody)
-		w.Write([]byte(`{"page":{"number":0,"rows_per_page":2,"total_pages":5,"total_elements":10},
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decoding request body: %v", err)
+		}
+		_, _ = w.Write([]byte(`{"page":{"number":0,"rows_per_page":2,"total_pages":5,"total_elements":10},
 			"elements":[{"id":"p1","commercial_description":[{"language":"GL","value":"Leite"},{"language":"ES","value":"Leche"}],
 			"price":1.17,"price_kilo_litre":1.17,"price_kilo_litre_suffix":[{"language":"ES","value":"el litro"}],"weight":"U"},
 			{"id":"p2","commercial_description":[{"language":"ES","value":"Plátano"}],"price":2.75,"price_kilo_litre_suffix":null,"weight":"P","scale":0.165,"min_weight":0.165}]}`))
@@ -80,8 +83,8 @@ func TestFindCategory(t *testing.T) {
 }
 
 func TestLookupPostalCode(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"elements":[{"store_id":"s-cor","postal_code":"15002","shipping_costs":4.5,"minimum_shipping_free":72}]}`))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"elements":[{"store_id":"s-cor","postal_code":"15002","shipping_costs":4.5,"minimum_shipping_free":72}]}`))
 	}))
 	defer srv.Close()
 	c := New(&Jar{})
@@ -93,7 +96,7 @@ func TestLookupPostalCode(t *testing.T) {
 	}
 	if _, err := c.LookupPostalCode(context.Background(), "28001"); err == nil {
 		t.Error("28001 should have no delivery")
-	} else if _, ok := err.(ErrNoDelivery); !ok {
+	} else if !errors.As(err, new(ErrNoDelivery)) {
 		t.Errorf("err = %T %v, want ErrNoDelivery", err, err)
 	}
 }

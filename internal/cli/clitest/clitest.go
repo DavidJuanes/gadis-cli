@@ -26,6 +26,10 @@ type CLI struct {
 	Stdin     string
 	Terminal  bool              // whether stdin is a terminal
 	Env       map[string]string // environment seen by the CLI; the process's is never read
+	// Private marks the output as personal data (the maintainer's real
+	// account and cart): a failing Result never prints it, only what went
+	// wrong.
+	Private bool
 
 	fake *gadistest.Server
 }
@@ -34,6 +38,7 @@ type CLI struct {
 type Result struct {
 	Stdout, Stderr string
 	Code           int
+	Private        bool // copied from the CLI: the output is personal data
 }
 
 // New returns a CLI wired to the fake Gadisline, with a fresh settings
@@ -69,7 +74,7 @@ func (c *CLI) Run(t testing.TB, args ...string) Result {
 		IsTerminal: func() bool { return c.Terminal },
 		Getenv:     func(k string) string { return c.Env[k] },
 	})
-	return Result{Stdout: stdout.String(), Stderr: stderr.String(), Code: code}
+	return Result{Stdout: stdout.String(), Stderr: stderr.String(), Code: code, Private: c.Private}
 }
 
 // JSON decodes stdout into v, failing the test unless stdout is exactly one
@@ -78,9 +83,16 @@ func (r Result) JSON(t testing.TB, v any) {
 	t.Helper()
 	dec := json.NewDecoder(strings.NewReader(r.Stdout))
 	if err := dec.Decode(v); err != nil {
+		if r.Private {
+			// The decode error quotes the offending value.
+			t.Fatalf("stdout is not valid JSON for %T (%s)", v, hidden)
+		}
 		t.Fatalf("stdout is not valid JSON (%v):\n%s\nstderr:\n%s", err, r.Stdout, r.Stderr)
 	}
 	if dec.More() {
+		if r.Private {
+			t.Fatalf("stdout has more than one JSON document (%s)", hidden)
+		}
 		t.Fatalf("stdout has more than one JSON document:\n%s", r.Stdout)
 	}
 }
@@ -88,8 +100,14 @@ func (r Result) JSON(t testing.TB, v any) {
 // Success fails the test unless the run exited with code 0.
 func (r Result) Success(t testing.TB) Result {
 	t.Helper()
+	if r.Code != 0 && r.Private {
+		t.Fatalf("exit code %d, want 0 (%s)", r.Code, hidden)
+	}
 	if r.Code != 0 {
 		t.Fatalf("exit code %d, want 0\nstdout:\n%s\nstderr:\n%s", r.Code, r.Stdout, r.Stderr)
 	}
 	return r
 }
+
+// hidden stands for the output of a private run in failure messages.
+const hidden = "output hidden: personal data"

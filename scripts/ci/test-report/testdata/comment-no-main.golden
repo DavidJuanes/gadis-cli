@@ -1,0 +1,16 @@
+<!-- test-report: cobertura -->
+## Cobertura
+
+**75.0%** de las sentencias. Todavía no hay cobertura de `main` publicada en la rama `badges`, así que no se calcula la diferencia.
+
+<details><summary>Por paquete</summary>
+
+| Paquete | Cobertura | Sentencias |
+| --- | ---: | ---: |
+| `calc` | 75.0% | 3/4 |
+| `greet` | 100.0% | 3/3 |
+| `notests` | 0.0% | 0/1 |
+
+</details>
+
+Tests: 2 pasan, 3 fallan, 1 se salta.
