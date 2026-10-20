@@ -1,8 +1,16 @@
 # gadis-cli
 
+[![CI](https://github.com/DavidJuanes/gadis-cli/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DavidJuanes/gadis-cli/actions/workflows/ci.yml?query=branch%3Amain)
 [![CodeQL](https://github.com/DavidJuanes/gadis-cli/actions/workflows/codeql.yml/badge.svg)](https://github.com/DavidJuanes/gadis-cli/actions/workflows/codeql.yml)
 [![Integración](https://github.com/DavidJuanes/gadis-cli/actions/workflows/integration.yml/badge.svg)](https://github.com/DavidJuanes/gadis-cli/actions/workflows/integration.yml)
+[![Cobertura](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FDavidJuanes%2Fgadis-cli%2Fbadges%2Fcoverage.json)](https://github.com/DavidJuanes/gadis-cli/actions/workflows/ci.yml?query=branch%3Amain)
+[![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FDavidJuanes%2Fgadis-cli%2Fbadges%2Ftests.json)](https://github.com/DavidJuanes/gadis-cli/actions/workflows/ci.yml?query=branch%3Amain)
+[![Vulnerabilidades](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FDavidJuanes%2Fgadis-cli%2Fbadges%2Fvulns.json)](https://github.com/DavidJuanes/gadis-cli/actions/workflows/ci.yml?query=branch%3Amain)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/DavidJuanes/gadis-cli/badge)](https://scorecard.dev/viewer/?uri=github.com/DavidJuanes/gadis-cli)
+[![Release](https://img.shields.io/github/v/release/DavidJuanes/gadis-cli)](https://github.com/DavidJuanes/gadis-cli/releases/latest)
+[![Go](https://img.shields.io/github/go-mod/go-version/DavidJuanes/gadis-cli)](go.mod)
+[![Licencia](https://img.shields.io/github/license/DavidJuanes/gadis-cli)](LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/DavidJuanes/gadis-cli.svg)](https://pkg.go.dev/github.com/DavidJuanes/gadis-cli)
 
 CLI para hacer la compra en [Gadisline](https://www.gadisline.com), la tienda online de los supermercados Gadis: buscar productos, ver categorías y gestionar el carrito de tu cuenta desde la terminal o desde scripts, LLMs y otras automatizaciones.
 
@@ -130,6 +138,7 @@ Cada PR y cada push a `main` pasan por [`ci.yml`](.github/workflows/ci.yml), con
 | `build` | `goreleaser build --snapshot` para las 6 plataformas de la release |
 | `install-sh` | `scripts/test-install.sh`: que `install.sh` aborta si el checksum o la attestation no cuadran |
 | `repo-settings` | `scripts/test-repo-settings.sh`: que `scripts/repo-settings.sh` crea o actualiza el ruleset sin duplicarlo y que los checks que exige son jobs que existen |
+| `badges` | Solo en push a `main`: [`scripts/ci/badges`](scripts/ci/badges) genera `coverage.json`, `tests.json` y `vulns.json` (formato *endpoint* de shields.io) a partir de los resultados de `test` y `vuln` y los publica en la rama huérfana `badges` en un único commit que reemplaza al anterior ([ADR-0002](docs/adr/0002-kpis-en-la-rama-badges.md)). De ahí salen los badges de KPIs y la cobertura de `main` del comentario de los PR |
 
 Solo se usan herramientas nativas de GitHub y actions oficiales fijadas por SHA, sin servicios externos ([ADR-0001](docs/adr/0001-herramientas-nativas-de-github.md)).
 
