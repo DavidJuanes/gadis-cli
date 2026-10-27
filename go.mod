@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/chromedp/cdproto v0.158.2
+	github.com/chromedp/cdproto v0.158.4
 	github.com/chromedp/chromedp v0.21.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/net v0.61.0
