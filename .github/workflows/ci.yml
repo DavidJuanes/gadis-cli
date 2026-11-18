@@ -95,7 +95,9 @@ jobs:
         with:
           name: govulncheck
           path: ${{ runner.temp }}/govulncheck.json
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      # Aviso, no fallo: un CVE nuevo no debe bloquear PRs ajenos a él. La alarma
+      # que falla y abre issue es vuln-scheduled.yml.
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... || echo "::warning title=govulncheck::hay vulnerabilidades alcanzables"
 
   # KPIs de main (cobertura, tests y vulnerabilidades) como JSON de shields.io
   # en la rama huérfana badges, que leen el README y el comentario de
