@@ -4,8 +4,8 @@ go 1.27.4
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/chromedp/cdproto v0.160.3
-	github.com/chromedp/chromedp v0.23.1
+	github.com/chromedp/cdproto v0.160.7
+	github.com/chromedp/chromedp v0.24.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/net v0.63.0
 	golang.org/x/term v0.48.0
